@@ -1,16 +1,30 @@
+// ============================================================
+// index.js - Archivo principal del servidor
+// Este archivo es el punto de entrada de toda la aplicación.
+// Aquí se configura Express, se registran las rutas de cada
+// módulo y se levanta el servidor en el puerto 3000.
+// ============================================================
+
 const express = require('express');
 const app = express();
 const port = 3000;
 
-const ProductosRutas = require('./Productos/ProductosRutas');
+// Importamos las rutas de cada módulo
+const usuariosRoutes = require('./Usuarios/UsuariosRutas');
+const productosRoutes = require('./Productos/ProductosRutas');
+const pedidosRoutes = require('./Pedidos/PedidosRutas');
+const ventasRoutes = require('./Ventas/VentasRutas');
 
-const UsuariosRutas = require('./Usuarios/UsuariosRutas');
-
+// Middleware para parsear JSON en las peticiones POST y PUT
 app.use(express.json());
 
-// todas las rutas de productos van a pasar por aqui
-app.use('/Productos', ProductosRutas);
+// Registro de rutas con su prefijo de URL
+app.use('/usuarios', usuariosRoutes);
+app.use('/productos', productosRoutes);
+app.use('/pedidos', pedidosRoutes);
+app.use('/ventas', ventasRoutes);
 
+// Iniciar el servidor
 app.listen(port, () => {
   console.log("Server esta arriba " + port);
 });

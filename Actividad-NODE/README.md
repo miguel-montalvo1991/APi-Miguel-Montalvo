@@ -1,41 +1,194 @@
-// permite que el servidor entienda JSON en las peticiones
-app.use(express.json());
+# API REST con Express.js
 
+Este proyecto es una API REST básica hecha con Node.js y Express. Maneja cuatro módulos: usuarios, productos, pedidos y ventas. Los datos se guardan en memoria (arrays), no hay base de datos por ahora.
 
-// ruta GET que devuelve todos los productos
-// el JSON.stringify con el 2 hace que se vea organizado e indentado
-app.get("/productos", (req, res) => {
-  res.setHeader("Content-Type", "application/json"); // le dice al cliente que la respuesta es JSON
-  res.send(JSON.stringify(Productos, null, 2)); // convierte el array a texto JSON bien formateado
-});
+Lo hice como ejercicio para practicar rutas, middlewares y los métodos HTTP (GET, POST, PUT, DELETE).
 
+---
 
-// GET por id - busca un solo producto por su id
-// el :id es un parametro dinamico, cambia segun lo que pongas en la url
-app.get("/productos/:id", (req, res) => {
-  const producto = Productos.find((p) => p.id == req.params.id); // recorre el array buscando el id que coincida
-  if (!producto) return res.status(404).json({ error: "producto no encontrado" }); // si no existe manda error 404
-  res.send(JSON.stringify(producto, null, 2)); // si existe lo devuelve formateado
-});
+## Requisitos
 
+- Node.js instalado
+- npm
 
-// POST - agrega un producto nuevo al array
-// los datos del producto nuevo llegan en el body de la peticion
+---
 
-// PUT - actualiza un producto existente por su id
-// solo cambia los campos que mandes, los demas quedan igual
+## Cómo correrlo
 
+```bash
+npm install
+node index.js
+```
 
-// DELETE - elimina un producto por su id
-// lo saca del array y confirma que fue eliminado
-app.delete("/productos/:id", (req, res) => {
-  const index = Productos.findIndex((p) => p.id == req.params.id); // busca la posicion del producto en el array
-  if (index === -1) return res.status(404).json({ error: "producto no encontrado" }); // si no existe manda error
-  const eliminado = Productos.splice(index, 1); // lo saca del array y lo guarda en una variable
-  res.send(JSON.stringify({ mensaje: "producto eliminado", producto: eliminado[0] }, null, 2)); // confirma que se elimino
-});
+El servidor queda corriendo en: `http://localhost:3000`
 
-// inicia el servidor en el puerto 3000
-app.listen(port, () => {
-  console.log("Server esta arriba " + port);
-});
+---
+
+## Autenticación
+
+Todos los endpoints están protegidos por un middleware que verifica una contraseña. Hay que enviarla en los **headers** de cada petición:
+
+| Header     | Valor      |
+|------------|------------|
+| `password` | `sena2025` |
+
+Si no se manda o es incorrecta, el servidor responde con un error `401`.
+
+---
+
+## Estructura del proyecto
+
+```
+/
+├── index.js
+├── Usuarios/
+│   └── UsuariosRutas.js
+├── Productos/
+│   └── ProductosRutas.js
+├── Pedidos/
+│   └── PedidosRutas.js
+└── Ventas/
+    └── VentasRutas.js
+```
+
+---
+
+## Endpoints
+
+Todos los módulos tienen los mismos 5 endpoints. Cambia solo el recurso (`/usuarios`, `/productos`, `/pedidos`, `/ventas`).
+
+### GET /recurso
+Retorna todos los registros. Se pueden filtrar por cualquier campo usando query params.
+
+```
+GET /usuarios?Nombre=carla
+GET /productos?categoria=ropa
+GET /pedidos?usuario=davier
+GET /ventas?estado=completada&metodoPago=efectivo
+```
+
+### GET /recurso/:id
+Retorna un solo registro buscado por su ID.
+
+```
+GET /usuarios/1
+GET /productos/3
+```
+
+### POST /recurso
+Crea un nuevo registro. Los datos van en el body en formato JSON. El ID se asigna automáticamente.
+
+```json
+// POST /usuarios
+{
+  "Nombre": "laura",
+  "Apellido": "gomez",
+  "email": "@laura.com",
+  "telefono": 3001234567
+}
+```
+
+```json
+// POST /productos
+{
+  "nombre": "gorra",
+  "categoria": "accesorios",
+  "precio": 25000,
+  "stock": 15
+}
+```
+
+```json
+// POST /pedidos
+{
+  "usuario": "laura",
+  "producto": "camisa",
+  "cantidad": 1,
+  "total": 35000
+}
+```
+
+```json
+// POST /ventas
+{
+  "fecha": "2025-03-01",
+  "usuario": "laura",
+  "total": 60000,
+  "metodoPago": "tarjeta",
+  "estado": "completada"
+}
+```
+
+### PUT /recurso/:id
+Actualiza un registro existente. Solo se modifican los campos que se manden, los demás quedan igual.
+
+```json
+// PUT /productos/2
+{
+  "stock": 20
+}
+```
+
+```json
+// PUT /ventas/3
+{
+  "estado": "completada"
+}
+```
+
+### DELETE /recurso/:id
+Elimina un registro por su ID. Responde con el objeto eliminado como confirmación.
+
+```
+DELETE /usuarios/1
+DELETE /pedidos/3
+```
+
+---
+
+## Campos por módulo
+
+### Usuarios
+| Campo    | Tipo   | Descripción         |
+|----------|--------|---------------------|
+| id       | number | Asignado automático |
+| Nombre   | string |                     |
+| Apellido | string |                     |
+| email    | string |                     |
+| telefono | number |                     |
+
+### Productos
+| Campo     | Tipo   | Descripción         |
+|-----------|--------|---------------------|
+| id        | number | Asignado automático |
+| nombre    | string |                     |
+| categoria | string |                     |
+| precio    | number | En pesos colombianos|
+| stock     | number |                     |
+
+### Pedidos
+| Campo    | Tipo   | Descripción         |
+|----------|--------|---------------------|
+| id       | number | Asignado automático |
+| usuario  | string |                     |
+| producto | string |                     |
+| cantidad | number |                     |
+| total    | number | En pesos colombianos|
+
+### Ventas
+| Campo      | Tipo   | Descripción                              |
+|------------|--------|------------------------------------------|
+| id         | number | Asignado automático                      |
+| fecha      | string | Formato YYYY-MM-DD                       |
+| usuario    | string |                                          |
+| total      | number | En pesos colombianos                     |
+| metodoPago | string | efectivo, tarjeta o transferencia        |
+| estado     | string | completada, pendiente o cancelada        |
+
+---
+
+## Notas
+
+- Los datos se guardan en memoria, si se reinicia el servidor se pierden los cambios.
+- El campo `password` que se mande en el body no se guarda en ningún registro.
+- Los filtros del GET son opcionales y se pueden combinar.
