@@ -1,29 +1,17 @@
 // ============================================================
 // ProductosRutas.js - Módulo de gestión de productos
-// Contiene todos los endpoints CRUD para manejar el catálogo
-// de productos. Todas las rutas requieren contraseña.
+// Ahora conectado a SQLite en vez de arreglos en memoria.
+// Incluye validaciones de tipos numéricos y campos obligatorios.
 // ============================================================
 
 const express = require("express");
 const router = express.Router();
-
-// ------------------------------------------------------------
-// Catálogo de productos almacenado en memoria
-// Campos: id, nombre, categoria, precio, stock
-// ------------------------------------------------------------
-const productos = [
-  { id: 1, nombre: "camisa",   categoria: "ropa",       precio: 35000,  stock: 10 },
-  { id: 2, nombre: "pantalon", categoria: "ropa",       precio: 60000,  stock: 5  },
-  { id: 3, nombre: "tenis",    categoria: "calzado",    precio: 120000, stock: 8  },
-  { id: 4, nombre: "mochila",  categoria: "accesorios", precio: 75000,  stock: 3  },
-];
+const db = require("../db/db");
 
 const CONTRASENA = "sena2025";
 
 // ------------------------------------------------------------
 // Middleware: verificarContrasena
-// Verifica que el header 'password' sea correcto antes de
-// permitir el acceso a cualquier endpoint del módulo.
 // ------------------------------------------------------------
 const verificarContrasena = (req, res, next) => {
   const password = req.headers['password'];
@@ -35,76 +23,135 @@ const verificarContrasena = (req, res, next) => {
 
 // ------------------------------------------------------------
 // GET /productos
-// Retorna todos los productos. Se pueden aplicar filtros
-// mediante query params en la URL.
-// Ejemplo: GET /productos?categoria=ropa
-// Ejemplo: GET /productos?precio=35000
+// Retorna todos los productos.
 // ------------------------------------------------------------
 router.get('/', verificarContrasena, (req, res) => {
-  const { id, nombre, categoria, precio, stock } = req.query;
-
-  let filteredProductos = productos.filter(p => {
-    return (
-      (!id        || p.id == id) &&
-      (!nombre    || p.nombre.toLowerCase().includes(nombre.toLowerCase())) &&
-      (!categoria || p.categoria.toLowerCase().includes(categoria.toLowerCase())) &&
-      (!precio    || p.precio == precio) &&
-      (!stock     || p.stock == stock)
-    );
+  db.all('SELECT * FROM productos', [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    res.json(rows);
   });
-
-  res.json(filteredProductos);
 });
 
 // ------------------------------------------------------------
 // GET /productos/:id
-// Busca un producto específico por su ID.
-// Ejemplo: GET /productos/3
+// Busca un producto por ID. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.get('/:id', verificarContrasena, (req, res) => {
-  const producto = productos.find((p) => p.id == req.params.id);
-  if (!producto) return res.status(404).json({ error: "producto no encontrado" });
-  res.send(JSON.stringify(producto, null, 2));
+  db.get('SELECT * FROM productos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'producto no encontrado' });
+    res.json(row);
+  });
 });
 
 // ------------------------------------------------------------
 // POST /productos
-// Agrega un nuevo producto al catálogo.
-// El ID se asigna automáticamente.
-// Ejemplo de body: { "nombre": "gorra", "categoria": "accesorios", "precio": 25000, "stock": 15 }
+// Crea un nuevo producto.
+// Validaciones: campos obligatorios, precio > 0, stock >= 0
+// Ejemplo body: { "nombre": "gorra", "categoria": "accesorios", "precio": 25000, "stock": 15 }
 // ------------------------------------------------------------
 router.post('/', verificarContrasena, (req, res) => {
-  // Excluimos el campo password del body antes de guardar
-  const { password, ...nuevoProducto } = req.body;
-  nuevoProducto.id = productos.length + 1;
-  productos.push(nuevoProducto);
-  res.status(201).send(JSON.stringify(nuevoProducto, null, 2));
+  const { nombre, categoria, precio, stock } = req.body;
+
+  // Validación: campos obligatorios
+  if (!nombre || !categoria || precio === undefined || stock === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: 'nombre, categoria, precio y stock son obligatorios'
+    });
+  }
+
+  // Validación: precio debe ser número mayor a 0
+  if (isNaN(precio) || Number(precio) <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'precio debe ser un número mayor a 0'
+    });
+  }
+
+  // Validación: stock debe ser entero mayor o igual a 0
+  if (!Number.isInteger(Number(stock)) || Number(stock) < 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'stock debe ser un número entero mayor o igual a 0'
+    });
+  }
+
+  db.run(
+    'INSERT INTO productos (nombre, categoria, precio, stock) VALUES (?, ?, ?, ?)',
+    [nombre, categoria, Number(precio), Number(stock)],
+    function(err) {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.status(201).json({
+        success: true,
+        data: { id: this.lastID, nombre, categoria, precio: Number(precio), stock: Number(stock) }
+      });
+    }
+  );
 });
 
 // ------------------------------------------------------------
 // PUT /productos/:id
-// Actualiza un producto existente por su ID.
-// Solo se sobreescriben los campos enviados en el body.
-// Ejemplo: PUT /productos/2 con body { "stock": 20 }
+// Actualiza un producto existente.
+// Validaciones: que exista, campos obligatorios, tipos correctos.
 // ------------------------------------------------------------
 router.put('/:id', verificarContrasena, (req, res) => {
-  const index = productos.findIndex((p) => p.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "producto no encontrado" });
-  // Mezclamos los datos actuales con los nuevos
-  productos[index] = { ...productos[index], ...req.body };
-  res.send(JSON.stringify(productos[index], null, 2));
+  const { nombre, categoria, precio, stock } = req.body;
+
+  // Validación: campos obligatorios
+  if (!nombre || !categoria || precio === undefined || stock === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: 'nombre, categoria, precio y stock son obligatorios'
+    });
+  }
+
+  // Validación: precio
+  if (isNaN(precio) || Number(precio) <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'precio debe ser un número mayor a 0'
+    });
+  }
+
+  // Validación: stock
+  if (!Number.isInteger(Number(stock)) || Number(stock) < 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'stock debe ser un número entero mayor o igual a 0'
+    });
+  }
+
+  // Verificamos que el producto exista
+  db.get('SELECT * FROM productos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'producto no encontrado' });
+
+    db.run(
+      'UPDATE productos SET nombre = ?, categoria = ?, precio = ?, stock = ? WHERE id = ?',
+      [nombre, categoria, Number(precio), Number(stock), req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: { id: Number(req.params.id), nombre, categoria, precio: Number(precio), stock: Number(stock) } });
+      }
+    );
+  });
 });
 
 // ------------------------------------------------------------
 // DELETE /productos/:id
-// Elimina un producto del catálogo por su ID.
-// Ejemplo: DELETE /productos/4
+// Elimina un producto. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.delete('/:id', verificarContrasena, (req, res) => {
-  const index = productos.findIndex((p) => p.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "producto no encontrado" });
-  const eliminado = productos.splice(index, 1);
-  res.json({ mensaje: "producto eliminado", producto: eliminado[0] });
+  db.get('SELECT * FROM productos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'producto no encontrado' });
+
+    db.run('DELETE FROM productos WHERE id = ?', [req.params.id], (err) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, message: 'producto eliminado', producto: row });
+    });
+  });
 });
 
 module.exports = router;

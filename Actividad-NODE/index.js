@@ -6,6 +6,7 @@
 // ============================================================
 
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const port = 3000;
 
@@ -14,6 +15,9 @@ const usuariosRoutes = require('./Usuarios/UsuariosRutas');
 const productosRoutes = require('./Productos/ProductosRutas');
 const pedidosRoutes = require('./Pedidos/PedidosRutas');
 const ventasRoutes = require('./Ventas/VentasRutas');
+
+// Permite que el frontend pueda conectarse al backend
+app.use(cors());
 
 // Middleware para parsear JSON en las peticiones POST y PUT
 app.use(express.json());

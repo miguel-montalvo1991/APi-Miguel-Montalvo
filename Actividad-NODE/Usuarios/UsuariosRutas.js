@@ -1,153 +1,152 @@
 // ============================================================
 // UsuariosRutas.js - Módulo de gestión de usuarios
-// Contiene todos los endpoints CRUD para manejar usuarios.
-// Cada ruta está protegida por el middleware verificarContrasena.
+// Ahora conectado a SQLite en vez de arreglos en memoria.
+// Incluye validaciones de campos obligatorios y unicidad.
 // ============================================================
 
 const express = require("express");
 const router = express.Router();
+const db = require("../db/db");
 
-// ------------------------------------------------------------
-// Base de datos simulada en memoria
-// En un proyecto real esto vendría de una base de datos (MySQL, MongoDB, etc.)
-// Por ahora usamos un arreglo de objetos JavaScript
-// ------------------------------------------------------------
-const usuarios = [
-  { id: 1, Nombre: "carla",       Apellido: "bravo",    email: "@carla.com",  telefono: 35515425   },
-  { id: 2, Nombre: "davier",      Apellido: "quinto",   email: "@davier.com", telefono: 2949892    },
-  { id: 3, Nombre: "manuela",     Apellido: "cordoba",  email: "@cordabo",    telefono: 1598469    },
-  { id: 4, Nombre: "miguel sama", Apellido: "montalvo", email: "@monta.com",  telefono: 4985168765 },
-];
-
-// Contraseña requerida para acceder a todos los endpoints
 const CONTRASENA = "sena2025";
 
 // ------------------------------------------------------------
 // Middleware: verificarContrasena
-// Se ejecuta ANTES de cada endpoint para verificar que la
-// petición incluya la contraseña correcta en los headers.
-// Si la contraseña es incorrecta o no se envía, responde con
-// un error 401 (No autorizado) y bloquea el acceso.
-// Si es correcta, llama a next() para continuar al endpoint.
 // ------------------------------------------------------------
 const verificarContrasena = (req, res, next) => {
   const password = req.headers['password'];
-
   if (!password || password !== CONTRASENA) {
     return res.status(401).json({ error: "Incorrect password, or password not sent" });
   }
-
-  // La contraseña es válida, continuamos con la petición
   next();
 };
 
 // ------------------------------------------------------------
 // GET /usuarios
-// Retorna todos los usuarios. Permite filtrar por cualquier
-// campo usando query params en la URL.
-// Ejemplo: GET /usuarios?Nombre=carla
-// Ejemplo: GET /usuarios?Apellido=bravo&telefono=35515425
+// Retorna todos los usuarios. Se pueden filtrar por query params.
+// Ejemplo: GET /usuarios?nombre=carla
 // ------------------------------------------------------------
 router.get('/', verificarContrasena, (req, res) => {
-  // Extraemos los posibles filtros de la query string
-  const { id, Nombre, Apellido, email, telefono } = req.query;
-
-  // Filtramos el arreglo según los parámetros que se hayan enviado
-  // Si un parámetro no se envió, la condición se ignora (retorna true)
-  let filteredUsuarios = usuarios.filter(u => {
-    return (
-      (!id       || u.id == id) &&
-      (!Nombre   || u.Nombre.toLowerCase().includes(Nombre.toLowerCase())) &&
-      (!Apellido || u.Apellido.toLowerCase().includes(Apellido.toLowerCase())) &&
-      (!email    || u.email == email) &&
-      (!telefono || u.telefono == telefono)
-    );
+  db.all('SELECT * FROM usuarios', [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    res.json(rows);
   });
-
-  // Respondemos con el arreglo filtrado en formato JSON
-  res.json(filteredUsuarios);
 });
 
 // ------------------------------------------------------------
 // GET /usuarios/:id
-// Busca y retorna un único usuario por su ID.
-// El :id es un parámetro dinámico que viene en la URL.
-// Ejemplo: GET /usuarios/1
-// Si no existe, responde con error 404.
+// Busca un usuario por ID. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.get('/:id', verificarContrasena, (req, res) => {
-  // Buscamos el usuario cuyo id coincida con el parámetro de la URL
-  const usuario = usuarios.find((u) => u.id == req.params.id);
-
-  // Si no se encontró el usuario, retornamos error 404
-  if (!usuario) return res.status(404).json({ error: "usuario no encontrado" });
-
-  // Respondemos con el usuario encontrado, formateado con indentación
-  res.send(JSON.stringify(usuario, null, 2));
+  db.get('SELECT * FROM usuarios WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'usuario no encontrado' });
+    res.json(row);
+  });
 });
 
 // ------------------------------------------------------------
 // POST /usuarios
-// Crea un nuevo usuario con los datos enviados en el body.
-// El ID se asigna automáticamente según el tamaño del arreglo.
-// Ejemplo de body: { "Nombre": "juan", "Apellido": "perez", "email": "@juan.com", "telefono": 123456 }
+// Crea un nuevo usuario.
+// Validaciones: nombre y email obligatorios, email único.
+// Ejemplo body: { "nombre": "juan", "apellido": "perez", "email": "juan@mail.com", "telefono": "123456" }
 // ------------------------------------------------------------
 router.post('/', verificarContrasena, (req, res) => {
-  // Separamos el campo password del body (no queremos guardarlo en el usuario)
-  // El operador spread (...) copia el resto de propiedades en nuevoUsuario
-  const { password, ...nuevoUsuario } = req.body;
+  const { nombre, apellido, email, telefono } = req.body;
 
-  // Asignamos el ID automáticamente
-  nuevoUsuario.id = usuarios.length + 1;
+  // Validación: campos obligatorios
+  if (!nombre || !email) {
+    return res.status(400).json({
+      success: false,
+      message: 'nombre y email son obligatorios'
+    });
+  }
 
-  // Agregamos el nuevo usuario al arreglo
-  usuarios.push(nuevoUsuario);
+  // Validación: email no debe estar ya registrado
+  db.get('SELECT id FROM usuarios WHERE email = ?', [email], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
 
-  // Respondemos con el usuario creado y código 201 (Created)
-  res.status(201).send(JSON.stringify(nuevoUsuario, null, 2));
+    if (row) {
+      return res.status(400).json({
+        success: false,
+        message: 'ese email ya está registrado'
+      });
+    }
+
+    // Todo bien, insertamos el usuario
+    db.run(
+      'INSERT INTO usuarios (nombre, apellido, email, telefono) VALUES (?, ?, ?, ?)',
+      [nombre, apellido || null, email, telefono || null],
+      function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.status(201).json({
+          success: true,
+          data: { id: this.lastID, nombre, apellido, email, telefono }
+        });
+      }
+    );
+  });
 });
 
 // ------------------------------------------------------------
 // PUT /usuarios/:id
-// Actualiza los datos de un usuario existente.
-// Solo se modifican los campos que se envíen en el body.
-// Los demás campos se conservan con el operador spread (...).
-// Ejemplo: PUT /usuarios/1 con body { "email": "nuevo@email.com" }
+// Actualiza un usuario existente.
+// Validaciones: que exista, nombre y email obligatorios, email único.
 // ------------------------------------------------------------
 router.put('/:id', verificarContrasena, (req, res) => {
-  // Buscamos el índice del usuario en el arreglo
-  const index = usuarios.findIndex((u) => u.id == req.params.id);
+  const { nombre, apellido, email, telefono } = req.body;
 
-  // Si no existe, retornamos error 404
-  if (index === -1) return res.status(404).json({ error: "usuario no encontrado" });
+  // Validación: campos obligatorios
+  if (!nombre || !email) {
+    return res.status(400).json({
+      success: false,
+      message: 'nombre y email son obligatorios'
+    });
+  }
 
-  // Combinamos los datos actuales con los nuevos del body
-  // Los nuevos sobreescriben los antiguos si tienen el mismo nombre
-  usuarios[index] = { ...usuarios[index], ...req.body };
+  // Verificamos que el usuario exista
+  db.get('SELECT * FROM usuarios WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'usuario no encontrado' });
 
-  // Respondemos con el usuario actualizado
-  res.send(JSON.stringify(usuarios[index], null, 2));
+    // Verificamos que el email no lo tenga otro usuario diferente
+    db.get('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, req.params.id], (err, otro) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+
+      if (otro) {
+        return res.status(400).json({
+          success: false,
+          message: 'ese email ya lo tiene otro usuario'
+        });
+      }
+
+      // Actualizamos
+      db.run(
+        'UPDATE usuarios SET nombre = ?, apellido = ?, email = ?, telefono = ? WHERE id = ?',
+        [nombre, apellido || null, email, telefono || null, req.params.id],
+        function(err) {
+          if (err) return res.status(500).json({ success: false, message: err.message });
+          res.json({ success: true, data: { id: Number(req.params.id), nombre, apellido, email, telefono } });
+        }
+      );
+    });
+  });
 });
 
 // ------------------------------------------------------------
 // DELETE /usuarios/:id
-// Elimina un usuario del arreglo por su ID.
-// Responde con un mensaje de confirmación y los datos eliminados.
-// Ejemplo: DELETE /usuarios/1
+// Elimina un usuario. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.delete('/:id', verificarContrasena, (req, res) => {
-  // Buscamos el índice del usuario a eliminar
-  const index = usuarios.findIndex((u) => u.id == req.params.id);
+  db.get('SELECT * FROM usuarios WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'usuario no encontrado' });
 
-  // Si no existe, retornamos error 404
-  if (index === -1) return res.status(404).json({ error: "usuario no encontrado" });
-
-  // splice(index, 1) elimina 1 elemento en la posición encontrada y lo retorna
-  const eliminado = usuarios.splice(index, 1);
-
-  // Respondemos con confirmación y los datos del usuario eliminado
-  res.json({ mensaje: "usuario eliminado", usuario: eliminado[0] });
+    db.run('DELETE FROM usuarios WHERE id = ?', [req.params.id], (err) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, message: 'usuario eliminado', usuario: row });
+    });
+  });
 });
 
-// Exportamos el router para que index.js pueda usarlo
 module.exports = router;

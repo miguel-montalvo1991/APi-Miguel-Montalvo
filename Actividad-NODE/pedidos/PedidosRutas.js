@@ -1,29 +1,17 @@
 // ============================================================
 // PedidosRutas.js - Módulo de gestión de pedidos
-// Contiene todos los endpoints CRUD para manejar los pedidos
-// realizados por los usuarios. Todas las rutas requieren contraseña.
+// Ahora conectado a SQLite en vez de arreglos en memoria.
+// Valida que el usuarioId y productoId existan antes de insertar.
 // ============================================================
 
 const express = require("express");
 const router = express.Router();
-
-// ------------------------------------------------------------
-// Pedidos almacenados en memoria
-// Campos: id, usuario, producto, cantidad, total
-// ------------------------------------------------------------
-const pedidos = [
-  { id: 1, usuario: "carla",       producto: "camisa",   cantidad: 2, total: 70000  },
-  { id: 2, usuario: "davier",      producto: "tenis",    cantidad: 1, total: 120000 },
-  { id: 3, usuario: "manuela",     producto: "mochila",  cantidad: 3, total: 225000 },
-  { id: 4, usuario: "miguel sama", producto: "pantalon", cantidad: 2, total: 120000 },
-];
+const db = require("../db/db");
 
 const CONTRASENA = "sena2025";
 
 // ------------------------------------------------------------
 // Middleware: verificarContrasena
-// Intercepta la petición antes del endpoint y valida
-// que el header 'password' tenga el valor correcto.
 // ------------------------------------------------------------
 const verificarContrasena = (req, res, next) => {
   const password = req.headers['password'];
@@ -35,76 +23,141 @@ const verificarContrasena = (req, res, next) => {
 
 // ------------------------------------------------------------
 // GET /pedidos
-// Retorna todos los pedidos con soporte para filtros.
-// Ejemplo: GET /pedidos?usuario=carla
-// Ejemplo: GET /pedidos?producto=tenis&cantidad=1
+// Retorna todos los pedidos.
 // ------------------------------------------------------------
 router.get('/', verificarContrasena, (req, res) => {
-  const { id, usuario, producto, cantidad, total } = req.query;
-
-  let filteredPedidos = pedidos.filter(p => {
-    return (
-      (!id       || p.id == id) &&
-      (!usuario  || p.usuario.toLowerCase().includes(usuario.toLowerCase())) &&
-      (!producto || p.producto.toLowerCase().includes(producto.toLowerCase())) &&
-      (!cantidad || p.cantidad == cantidad) &&
-      (!total    || p.total == total)
-    );
+  db.all('SELECT * FROM pedidos', [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    res.json(rows);
   });
-
-  res.json(filteredPedidos);
 });
 
 // ------------------------------------------------------------
 // GET /pedidos/:id
-// Busca y retorna un pedido específico por su ID.
-// Ejemplo: GET /pedidos/2
+// Busca un pedido por ID. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.get('/:id', verificarContrasena, (req, res) => {
-  const pedido = pedidos.find((p) => p.id == req.params.id);
-  if (!pedido) return res.status(404).json({ error: "pedido no encontrado" });
-  res.send(JSON.stringify(pedido, null, 2));
+  db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'pedido no encontrado' });
+    res.json(row);
+  });
 });
 
 // ------------------------------------------------------------
 // POST /pedidos
-// Registra un nuevo pedido con los datos del body.
-// El ID se asigna automáticamente.
-// Ejemplo de body: { "usuario": "laura", "producto": "camisa", "cantidad": 1, "total": 35000 }
+// Crea un nuevo pedido.
+// Validaciones: campos obligatorios, tipos, y que el usuario
+// y producto referenciados existan en la BD.
+// Ejemplo body: { "usuarioId": 1, "productoId": 2, "cantidad": 3, "total": 90000 }
 // ------------------------------------------------------------
 router.post('/', verificarContrasena, (req, res) => {
-  // Excluimos el campo password antes de guardar el pedido
-  const { password, ...nuevoPedido } = req.body;
-  nuevoPedido.id = pedidos.length + 1;
-  pedidos.push(nuevoPedido);
-  res.status(201).send(JSON.stringify(nuevoPedido, null, 2));
+  const { usuarioId, productoId, cantidad, total } = req.body;
+
+  // Validación: campos obligatorios
+  if (!usuarioId || !productoId || !cantidad || !total) {
+    return res.status(400).json({
+      success: false,
+      message: 'usuarioId, productoId, cantidad y total son obligatorios'
+    });
+  }
+
+  // Validación: cantidad debe ser entero mayor a 0
+  if (!Number.isInteger(Number(cantidad)) || Number(cantidad) <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'cantidad debe ser un número entero mayor a 0'
+    });
+  }
+
+  // Validación: total debe ser número mayor a 0
+  if (isNaN(total) || Number(total) <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'total debe ser un número mayor a 0'
+    });
+  }
+
+  // Verificamos que el usuario exista
+  db.get('SELECT id FROM usuarios WHERE id = ?', [usuarioId], (err, usuario) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!usuario) return res.status(404).json({ success: false, message: 'el usuarioId no existe' });
+
+    // Verificamos que el producto exista
+    db.get('SELECT id FROM productos WHERE id = ?', [productoId], (err, producto) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      if (!producto) return res.status(404).json({ success: false, message: 'el productoId no existe' });
+
+      // Todo bien, insertamos el pedido
+      db.run(
+        'INSERT INTO pedidos (usuarioId, productoId, cantidad, total) VALUES (?, ?, ?, ?)',
+        [usuarioId, productoId, Number(cantidad), Number(total)],
+        function(err) {
+          if (err) return res.status(500).json({ success: false, message: err.message });
+          res.status(201).json({
+            success: true,
+            data: { id: this.lastID, usuarioId, productoId, cantidad: Number(cantidad), total: Number(total) }
+          });
+        }
+      );
+    });
+  });
 });
 
 // ------------------------------------------------------------
 // PUT /pedidos/:id
-// Actualiza un pedido existente por su ID.
-// Solo se modifican los campos que lleguen en el body.
-// Ejemplo: PUT /pedidos/1 con body { "cantidad": 5, "total": 175000 }
+// Actualiza un pedido existente.
 // ------------------------------------------------------------
 router.put('/:id', verificarContrasena, (req, res) => {
-  const index = pedidos.findIndex((p) => p.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "pedido no encontrado" });
-  // El spread operator conserva los campos actuales y sobreescribe los nuevos
-  pedidos[index] = { ...pedidos[index], ...req.body };
-  res.send(JSON.stringify(pedidos[index], null, 2));
+  const { usuarioId, productoId, cantidad, total } = req.body;
+
+  // Validación: campos obligatorios
+  if (!usuarioId || !productoId || !cantidad || !total) {
+    return res.status(400).json({
+      success: false,
+      message: 'usuarioId, productoId, cantidad y total son obligatorios'
+    });
+  }
+
+  // Validación: tipos
+  if (!Number.isInteger(Number(cantidad)) || Number(cantidad) <= 0) {
+    return res.status(400).json({ success: false, message: 'cantidad debe ser un entero mayor a 0' });
+  }
+
+  if (isNaN(total) || Number(total) <= 0) {
+    return res.status(400).json({ success: false, message: 'total debe ser un número mayor a 0' });
+  }
+
+  // Verificamos que el pedido exista
+  db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'pedido no encontrado' });
+
+    db.run(
+      'UPDATE pedidos SET usuarioId = ?, productoId = ?, cantidad = ?, total = ? WHERE id = ?',
+      [usuarioId, productoId, Number(cantidad), Number(total), req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: { id: Number(req.params.id), usuarioId, productoId, cantidad: Number(cantidad), total: Number(total) } });
+      }
+    );
+  });
 });
 
 // ------------------------------------------------------------
 // DELETE /pedidos/:id
-// Elimina un pedido por su ID.
-// Responde con el pedido eliminado como confirmación.
-// Ejemplo: DELETE /pedidos/3
+// Elimina un pedido. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.delete('/:id', verificarContrasena, (req, res) => {
-  const index = pedidos.findIndex((p) => p.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "pedido no encontrado" });
-  const eliminado = pedidos.splice(index, 1);
-  res.json({ mensaje: "pedido eliminado", pedido: eliminado[0] });
+  db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'pedido no encontrado' });
+
+    db.run('DELETE FROM pedidos WHERE id = ?', [req.params.id], (err) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, message: 'pedido eliminado', pedido: row });
+    });
+  });
 });
 
 module.exports = router;

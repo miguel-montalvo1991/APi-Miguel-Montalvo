@@ -1,30 +1,21 @@
 // ============================================================
 // VentasRutas.js - Módulo de gestión de ventas
-// Contiene todos los endpoints CRUD para manejar el historial
-// de ventas del sistema. Todas las rutas requieren contraseña.
+// Ahora conectado a SQLite en vez de arreglos en memoria.
+// Valida metodoPago, estado y que el usuario exista.
 // ============================================================
 
 const express = require("express");
 const router = express.Router();
-
-// ------------------------------------------------------------
-// Ventas almacenadas en memoria
-// Campos: id, fecha, usuario, total, metodoPago, estado
-// Estados posibles: completada, pendiente, cancelada
-// ------------------------------------------------------------
-const ventas = [
-  { id: 1, fecha: "2025-01-10", usuario: "carla",       total: 70000,  metodoPago: "efectivo",     estado: "completada" },
-  { id: 2, fecha: "2025-01-15", usuario: "davier",      total: 120000, metodoPago: "tarjeta",       estado: "completada" },
-  { id: 3, fecha: "2025-02-01", usuario: "manuela",     total: 225000, metodoPago: "transferencia", estado: "pendiente"  },
-  { id: 4, fecha: "2025-02-10", usuario: "miguel sama", total: 120000, metodoPago: "efectivo",      estado: "cancelada"  },
-];
+const db = require("../db/db");
 
 const CONTRASENA = "sena2025";
 
+// Valores permitidos para metodoPago y estado
+const METODOS_PAGO = ['efectivo', 'tarjeta', 'transferencia'];
+const ESTADOS      = ['completada', 'pendiente', 'cancelada'];
+
 // ------------------------------------------------------------
 // Middleware: verificarContrasena
-// Valida la contraseña del header antes de cada endpoint.
-// Responde 401 si no se envía o si es incorrecta.
 // ------------------------------------------------------------
 const verificarContrasena = (req, res, next) => {
   const password = req.headers['password'];
@@ -36,77 +27,151 @@ const verificarContrasena = (req, res, next) => {
 
 // ------------------------------------------------------------
 // GET /ventas
-// Retorna todas las ventas con soporte para filtros.
-// Ejemplo: GET /ventas?estado=completada
-// Ejemplo: GET /ventas?metodoPago=efectivo&usuario=carla
+// Retorna todas las ventas.
 // ------------------------------------------------------------
 router.get('/', verificarContrasena, (req, res) => {
-  const { id, fecha, usuario, total, metodoPago, estado } = req.query;
-
-  let filteredVentas = ventas.filter(v => {
-    return (
-      (!id         || v.id == id) &&
-      (!fecha      || v.fecha == fecha) &&
-      (!usuario    || v.usuario.toLowerCase().includes(usuario.toLowerCase())) &&
-      (!total      || v.total == total) &&
-      (!metodoPago || v.metodoPago.toLowerCase().includes(metodoPago.toLowerCase())) &&
-      (!estado     || v.estado.toLowerCase().includes(estado.toLowerCase()))
-    );
+  db.all('SELECT * FROM ventas', [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    res.json(rows);
   });
-
-  res.json(filteredVentas);
 });
 
 // ------------------------------------------------------------
 // GET /ventas/:id
-// Retorna una venta específica buscada por su ID.
-// Ejemplo: GET /ventas/2
+// Busca una venta por ID. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.get('/:id', verificarContrasena, (req, res) => {
-  const venta = ventas.find((v) => v.id == req.params.id);
-  if (!venta) return res.status(404).json({ error: "venta no encontrada" });
-  res.send(JSON.stringify(venta, null, 2));
+  db.get('SELECT * FROM ventas WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'venta no encontrada' });
+    res.json(row);
+  });
 });
 
 // ------------------------------------------------------------
 // POST /ventas
-// Registra una nueva venta con los datos del body.
-// El ID se asigna automáticamente.
-// Ejemplo de body: { "fecha": "2025-03-01", "usuario": "laura", "total": 60000, "metodoPago": "tarjeta", "estado": "completada" }
+// Crea una nueva venta.
+// Validaciones: campos obligatorios, total > 0,
+// metodoPago y estado deben ser valores válidos,
+// y el usuarioId debe existir en la BD.
+// Ejemplo body: { "usuarioId": 1, "fecha": "2025-03-01", "total": 60000, "metodoPago": "tarjeta", "estado": "completada" }
 // ------------------------------------------------------------
 router.post('/', verificarContrasena, (req, res) => {
-  // Separamos el campo password para no guardarlo en la venta
-  const { password, ...nuevaVenta } = req.body;
-  nuevaVenta.id = ventas.length + 1;
-  ventas.push(nuevaVenta);
-  res.status(201).send(JSON.stringify(nuevaVenta, null, 2));
+  const { usuarioId, fecha, total, metodoPago, estado } = req.body;
+
+  // Validación: campos obligatorios
+  if (!usuarioId || !fecha || !total || !metodoPago) {
+    return res.status(400).json({
+      success: false,
+      message: 'usuarioId, fecha, total y metodoPago son obligatorios'
+    });
+  }
+
+  // Validación: total debe ser número mayor a 0
+  if (isNaN(total) || Number(total) <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'total debe ser un número mayor a 0'
+    });
+  }
+
+  // Validación: metodoPago debe ser uno de los permitidos
+  if (!METODOS_PAGO.includes(metodoPago)) {
+    return res.status(400).json({
+      success: false,
+      message: `metodoPago debe ser: ${METODOS_PAGO.join(', ')}`
+    });
+  }
+
+  // Validación: estado debe ser uno de los permitidos (si se envía)
+  const estadoFinal = estado || 'pendiente';
+  if (!ESTADOS.includes(estadoFinal)) {
+    return res.status(400).json({
+      success: false,
+      message: `estado debe ser: ${ESTADOS.join(', ')}`
+    });
+  }
+
+  // Verificamos que el usuario exista
+  db.get('SELECT id FROM usuarios WHERE id = ?', [usuarioId], (err, usuario) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!usuario) return res.status(404).json({ success: false, message: 'el usuarioId no existe' });
+
+    db.run(
+      'INSERT INTO ventas (usuarioId, fecha, total, metodoPago, estado) VALUES (?, ?, ?, ?, ?)',
+      [usuarioId, fecha, Number(total), metodoPago, estadoFinal],
+      function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.status(201).json({
+          success: true,
+          data: { id: this.lastID, usuarioId, fecha, total: Number(total), metodoPago, estado: estadoFinal }
+        });
+      }
+    );
+  });
 });
 
 // ------------------------------------------------------------
 // PUT /ventas/:id
-// Actualiza una venta existente por su ID.
-// Útil por ejemplo para cambiar el estado de pendiente a completada.
-// Ejemplo: PUT /ventas/3 con body { "estado": "completada" }
+// Actualiza una venta existente.
+// Muy útil para cambiar el estado de pendiente a completada.
 // ------------------------------------------------------------
 router.put('/:id', verificarContrasena, (req, res) => {
-  const index = ventas.findIndex((v) => v.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "venta no encontrada" });
-  // Conservamos los campos actuales y sobreescribimos los del body
-  ventas[index] = { ...ventas[index], ...req.body };
-  res.send(JSON.stringify(ventas[index], null, 2));
+  const { usuarioId, fecha, total, metodoPago, estado } = req.body;
+
+  // Validación: campos obligatorios
+  if (!usuarioId || !fecha || !total || !metodoPago || !estado) {
+    return res.status(400).json({
+      success: false,
+      message: 'usuarioId, fecha, total, metodoPago y estado son obligatorios'
+    });
+  }
+
+  // Validación: total
+  if (isNaN(total) || Number(total) <= 0) {
+    return res.status(400).json({ success: false, message: 'total debe ser un número mayor a 0' });
+  }
+
+  // Validación: metodoPago
+  if (!METODOS_PAGO.includes(metodoPago)) {
+    return res.status(400).json({ success: false, message: `metodoPago debe ser: ${METODOS_PAGO.join(', ')}` });
+  }
+
+  // Validación: estado
+  if (!ESTADOS.includes(estado)) {
+    return res.status(400).json({ success: false, message: `estado debe ser: ${ESTADOS.join(', ')}` });
+  }
+
+  // Verificamos que la venta exista
+  db.get('SELECT * FROM ventas WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'venta no encontrada' });
+
+    db.run(
+      'UPDATE ventas SET usuarioId = ?, fecha = ?, total = ?, metodoPago = ?, estado = ? WHERE id = ?',
+      [usuarioId, fecha, Number(total), metodoPago, estado, req.params.id],
+      function(err) {
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        res.json({ success: true, data: { id: Number(req.params.id), usuarioId, fecha, total: Number(total), metodoPago, estado } });
+      }
+    );
+  });
 });
 
 // ------------------------------------------------------------
 // DELETE /ventas/:id
-// Elimina una venta del historial por su ID.
-// Responde con los datos de la venta eliminada.
-// Ejemplo: DELETE /ventas/4
+// Elimina una venta. Retorna 404 si no existe.
 // ------------------------------------------------------------
 router.delete('/:id', verificarContrasena, (req, res) => {
-  const index = ventas.findIndex((v) => v.id == req.params.id);
-  if (index === -1) return res.status(404).json({ error: "venta no encontrada" });
-  const eliminado = ventas.splice(index, 1);
-  res.json({ mensaje: "venta eliminada", venta: eliminado[0] });
+  db.get('SELECT * FROM ventas WHERE id = ?', [req.params.id], (err, row) => {
+    if (err) return res.status(500).json({ success: false, message: err.message });
+    if (!row) return res.status(404).json({ success: false, message: 'venta no encontrada' });
+
+    db.run('DELETE FROM ventas WHERE id = ?', [req.params.id], (err) => {
+      if (err) return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, message: 'venta eliminada', venta: row });
+    });
+  });
 });
 
 module.exports = router;
