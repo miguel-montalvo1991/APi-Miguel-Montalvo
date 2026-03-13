@@ -3,7 +3,6 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Middleware de autenticación
 app.use((req, res, next) => {
   const apiKey = req.headers['password'];
   if (!apiKey) return res.status(401).json({ success: false, message: 'API key requerida' });
@@ -13,10 +12,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/productos',  require('./routes/productos'));
-app.use('/usuarios',   require('./routes/usuarios'));
-app.use('/ventas', require('./routes/ventas'));
-app.use('/pedidos',    require('./routes/pedidos'));
+app.use('/productos',  require('./routes/productosRutas'));
+app.use('/usuarios',   require('./routes/usuariosRutas'));
+app.use('/pedidos',    require('./routes/pedidosRutas'));
+app.use('/ventas',     require('./routes/ventasRutas'));
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () =>
