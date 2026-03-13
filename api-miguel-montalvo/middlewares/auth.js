@@ -5,7 +5,7 @@
 // Si en algún momento cambia la contraseña, solo se modifica este archivo.
 // ============================================================
 
-const CONTRASENA = "sena2025";
+const CONTRASENA = "sena2026";
 
 const verificarContrasena = (req, res, next) => {
   const password = req.headers['password'];

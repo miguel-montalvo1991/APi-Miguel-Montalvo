@@ -1,34 +1,24 @@
-// ============================================================
-// index.js - Archivo principal del servidor
-// Este archivo es el punto de entrada de toda la aplicación.
-// Aquí se configura Express, se registran las rutas de cada
-// módulo y se levanta el servidor en el puerto 3000.
-// ============================================================
-
+require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const app = express();
-const port = 3000;
-
-// Importamos las rutas de cada módulo
-const usuariosRoutes = require('./Usuarios/UsuariosRutas');
-const productosRoutes = require('./Productos/ProductosRutas');
-const pedidosRoutes = require('./Pedidos/PedidosRutas');
-const ventasRoutes = require('./Ventas/VentasRutas');
-
-// Permite que el frontend pueda conectarse al backend
-app.use(cors());
-
-// Middleware para parsear JSON en las peticiones POST y PUT
 app.use(express.json());
 
-// Registro de rutas con su prefijo de URL
-app.use('/usuarios', usuariosRoutes);
-app.use('/productos', productosRoutes);
-app.use('/pedidos', pedidosRoutes);
-app.use('/ventas', ventasRoutes);
-
-// Iniciar el servidor
-app.listen(port, () => {
-  console.log("Server esta arriba " + port);
+// Middleware de autenticación
+app.use((req, res, next) => {
+  const apiKey = req.headers['password'];
+  if (!apiKey) return res.status(401).json({ success: false, message: 'API key requerida' });
+  if (apiKey !== process.env.API_PASSWORD) {
+    return res.status(403).json({ success: false, message: 'Password incorrecta' });
+  }
+  next();
 });
+
+app.use('/productos',  require('./routes/productos'));
+app.use('/usuarios',   require('./routes/usuarios'));
+app.use('/categorias', require('./routes/categorias'));
+app.use('/pedidos',    require('./routes/pedidos'));
+
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () =>
+  console.log(`API corriendo en http://localhost:${server.address().port}`)
+);
