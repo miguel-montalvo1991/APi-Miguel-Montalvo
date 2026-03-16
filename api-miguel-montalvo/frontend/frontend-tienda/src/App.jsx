@@ -200,8 +200,8 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
           <div>
             <h2 className={`font-bold text-lg ${c.head}`}>{nombre}</h2>
             <p  className="text-xs text-gray-500">
-               {loading ? "Cargando..." : `${data.length} registros`}
-                 </p>
+                {loading ? "Cargando..." : `${data.length} registros`}
+            </p>
           </div>
         </div>
         <button onClick={abrirCrear}
@@ -427,7 +427,7 @@ export default function App() {
 
       {/* footer */}
       <footer className="border-t border-[#21262d] mt-16 py-6 text-center text-xs text-gray-700">
-        Davier Quinto · Manuela Córdoba · Luis Miguel Montalvo — SENA 2026
+        Luis Miguel Montalvo — SENA 2026
       </footer>
     </div>
   );
