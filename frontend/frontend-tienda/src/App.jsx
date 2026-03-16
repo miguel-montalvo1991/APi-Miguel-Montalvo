@@ -548,7 +548,8 @@ export default function App() {
 
       {/* FOOTER */}
       <footer className="border-t border-[#21262d] mt-16 py-6 text-center text-xs text-gray-700">
-        Davier Quinto · Manuela Córdoba · Luis Miguel Montalvo — SENA 2026
+      
+                              Luis Miguel Montalvo — SENA 2026
       </footer>
     </div>
   );
