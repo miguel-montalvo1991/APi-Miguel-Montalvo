@@ -1,8 +1,8 @@
-# 🛒 Actividad-NODE — API REST + Tienda Virtual
+# 🛒 Tienda Virtual — API REST + Panel de Gestión
 
 Proyecto desarrollado en el **SENA** como parte del proceso formativo en **Análisis y Desarrollo de Software (ADSO)**.
 
-Consiste en una **API REST** construida con Node.js y Express, conectada a una base de datos SQLite, y un **frontend en React + Vite** que funciona como tienda virtual.
+Consiste en una **API REST** construida con Node.js y Express, conectada a una base de datos SQLite, y un **frontend en React + Vite** que funciona como panel de gestión de la tienda.
 
 ---
 
@@ -14,51 +14,63 @@ Consiste en una **API REST** construida con Node.js y Express, conectada a una b
 | Davier Andrés Quinto Bejarano | Aprendiz ADSO |
 | Luis Miguel Montalvo Álvarez | Aprendiz ADSO |
 
--  **Ficha:** 3229209
--  **Instructor:** Mateo Arroyave
--  **Centro de formación:** SENA — Tecnología en Análisis y Desarrollo de Software
--  **Trimestre:** Segundo trimestre — 2026
+- **Ficha:** 3229209
+- **Instructor:** Mateo Arroyave
+- **Centro de formación:** SENA — Tecnología en Análisis y Desarrollo de Software
+- **Trimestre:** Tercer trimestre — 2026
+
+---
+
+## 🌐 URLs del proyecto desplegado
+
+| Servicio | URL |
+|---|---|
+| Frontend (Netlify) | https://api-miguel-montalvo.netlify.app |
+| Backend (Render) | https://api-miguel-montalvo.onrender.com |
+
+> ⚠️ El backend está en el plan gratuito de Render. La primera petición puede tardar hasta 50 segundos mientras el servidor despierta.
 
 ---
 
 ## 📁 Estructura del proyecto
 
 ```
-Actividad-NODE/
+api-miguel-montalvo/
 │
-├── index.js                  # Punto de entrada del servidor
-├── database.db               # Base de datos SQLite (se genera automáticamente)
+├── index.js                        # Punto de entrada del servidor
+├── database.db                     # Base de datos SQLite (se genera automáticamente)
 ├── package.json
 │
 ├── db/
-│   └── db.js                 # Conexión a SQLite y creación de tablas
+│   └── db.js                       # Conexión a SQLite y creación de tablas
 │
 ├── middlewares/
-│   └── auth.js               # Middleware de autenticación centralizado
+│   └── auth.js                     # Middleware de autenticación centralizado
 │
-├── models/                   # Capa de acceso a datos (consultas SQL)
+├── models/                         # Capa de acceso a datos (consultas SQL)
 │   ├── usuariosModel.js
 │   ├── productosModel.js
 │   ├── pedidosModel.js
 │   └── ventasModel.js
 │
-├── controllers/              # Lógica de negocio y validaciones
+├── controllers/                    # Lógica de negocio y validaciones
 │   ├── usuariosController.js
 │   ├── productosController.js
 │   ├── pedidosController.js
 │   └── ventasController.js
 │
-├── Usuarios/
-│   └── UsuariosRutas.js      # Rutas del módulo usuarios
-├── Productos/
-│   └── ProductosRutas.js     # Rutas del módulo productos
-├── Pedidos/
-│   └── PedidosRutas.js       # Rutas del módulo pedidos
-├── Ventas/
-│   └── VentasRutas.js        # Rutas del módulo ventas
+├── routes/                         # Definición de rutas
+│   ├── usuariosRutas.js
+│   ├── productosRutas.js
+│   ├── pedidosRutas.js
+│   └── ventasRutas.js
 │
 └── frontend/
-    └── frontend-tienda/      # Aplicación React + Vite (tienda virtual)
+    └── frontend-tienda/            # Aplicación React + Vite (panel de gestión)
+        ├── src/
+        │   └── App.jsx             # Componente principal con toda la lógica del frontend
+        ├── index.html
+        └── dist/                   # Build listo para producción
 ```
 
 ---
@@ -71,23 +83,40 @@ Actividad-NODE/
 | Express | Framework para la API REST |
 | SQLite3 | Base de datos local |
 | CORS | Comunicación entre frontend y backend |
+| dotenv | Variables de entorno |
 | React | Librería para el frontend |
 | Vite | Empaquetador del frontend |
 | Tailwind CSS | Estilos del frontend |
+| Netlify | Despliegue del frontend |
+| Render | Despliegue del backend |
 
 ---
 
-## 🚀 Cómo ejecutar el proyecto
+## 🚀 Cómo ejecutar el proyecto en local
 
-### 1. Instalar dependencias del backend
+### 1. Clonar el repositorio
 
-Estando en la carpeta raíz `Actividad-NODE`:
+```bash
+git clone https://github.com/miguel-montalvo1991/APi-Miguel-Montalvo.git
+cd APi-Miguel-Montalvo
+```
+
+### 2. Instalar dependencias del backend
 
 ```bash
 npm install
 ```
 
-### 2. Iniciar el servidor backend
+### 3. Crear el archivo de variables de entorno
+
+Crear un archivo `.env` en la raíz del proyecto con este contenido:
+
+```
+API_PASSWORD=sena2026
+PORT=3000
+```
+
+### 4. Iniciar el servidor backend
 
 ```bash
 node index.js
@@ -103,10 +132,10 @@ Tabla usuarios lista
 Tabla productos lista
 Tabla pedidos lista
 Tabla ventas lista
-Server esta arriba 3000
+Servidor corriendo en puerto 3000
 ```
 
-### 3. Iniciar el frontend (en otra terminal)
+### 5. Iniciar el frontend (en otra terminal)
 
 ```bash
 cd frontend/frontend-tienda
@@ -123,7 +152,7 @@ El frontend queda disponible en: `http://localhost:5173`
 Todas las rutas de la API están protegidas por un middleware de autenticación. Se debe enviar el siguiente header en cada petición:
 
 ```
-password: sena2025
+password: sena2026
 ```
 
 Si no se envía o es incorrecto, la API responde con:
@@ -319,14 +348,12 @@ CREATE TABLE IF NOT EXISTS ventas (
 | FK | usuarioId | INTEGER | NO | — | REFERENCES usuarios(id) | Usuario de la venta |
 | | fecha | TEXT | NO | — | NOT NULL | Fecha de la venta |
 | | total | REAL | NO | — | CHECK > 0 | Valor total de la venta |
-| | metodoPago | TEXT | NO | — | CHECK IN (efectivo, tarjeta, transferencia) | Método de pago |
-| | estado | TEXT | NO | pendiente | CHECK IN (completada, pendiente, cancelada) | Estado de la venta |
+| | metodoPago | TEXT | NO | — | CHECK IN (...) | Método de pago |
+| | estado | TEXT | NO | pendiente | CHECK IN (...) | Estado de la venta |
 
 ---
 
 ## 📊 Diagrama Entidad–Relación
-
-> Insertar aquí la imagen del diagrama ER
 
 ```
 usuarios  ──────1──────<  pedidos  >──────1──────  productos
@@ -359,20 +386,32 @@ Esto hace el código más organizado, fácil de mantener y de escalar.
 
 ## 🧪 Pruebas con Postman
 
-La colección de pruebas incluye casos válidos e inválidos (errores 400 y 404) para todos los módulos.
+Para probar los endpoints se puede usar Postman. Hay que recordar siempre incluir el header de autenticación:
 
-> Importar el archivo `postman-collection.json` en Postman para ejecutar las pruebas.
+```
+Key:   password
+Value: sena2026
+```
+
+Ejemplo de prueba para crear un usuario:
+- Método: `POST`
+- URL: `https://api-miguel-montalvo.onrender.com`
+- Header: `password: sena2026`
+- Body (JSON):
+```json
+{
+  "nombre": "Luis",
+  "apellido": "Montalvo",
+  "email": "luis@mail.com",
+  "telefono": "3001234567"
+}
+```
 
 ---
 
 ## 💭 Reflexión del equipo
 
-Durante el desarrollo de esta actividad aprendimos a conectar Node.js con SQLite usando el módulo `sqlite3`, a organizar el código en capas (rutas, controladores y modelos) y a proteger los endpoints con un middleware de autenticación. También entendimos la importancia de activar las llaves foráneas en SQLite con `PRAGMA foreign_keys = ON` ya que vienen desactivadas por defecto. Fue un proceso de mucho ensayo y error pero logramos que todo funcionara correctamente.
+Durante el desarrollo de esta actividad aprendimos a conectar Node.js con SQLite usando el módulo `sqlite3`, a organizar el código en capas (rutas, controladores y modelos) y a proteger los endpoints con un middleware de autenticación. También aprendimos a desplegar el backend en Render y el frontend en Netlify, y a configurar correctamente el CORS para que ambos servicios se puedan comunicar. Entendimos la importancia de activar las llaves foráneas en SQLite con `PRAGMA foreign_keys = ON` ya que vienen desactivadas por defecto. Fue un proceso de mucho ensayo y error pero logramos que todo funcionara correctamente.
 
 ---
 
-## 👨‍💻 Autor
-
-Proyecto desarrollado por aprendices del SENA — Ficha **3229209**  
-Segundo trimestre — Desarrollo de Software  
-Instructor: **Mateo Arroyave**
