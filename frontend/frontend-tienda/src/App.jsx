@@ -486,7 +486,7 @@ export default function App() {
   const t   = TABS.find(t => t.key === tab);
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white" style={{ fontFamily: "'DM Mono', monospace" }}>
+    <div className="min-h-screen text-white" style={{ backgroundImage: "url('/galaxia.jpg')", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       {/* Fuentes de Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
 
