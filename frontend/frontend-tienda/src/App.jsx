@@ -1,24 +1,51 @@
+// ============================================================
+// src/App.jsx - Componente principal del frontend
+//
+// Este archivo contiene TODA la lógica del panel de gestión:
+// - Conexión con la API
+// - Componentes reutilizables (Toast, Modal, Modulo)
+// - Configuración de cada módulo (usuarios, productos, etc.)
+// - La App principal con tabs y navegación
+// ============================================================
+
 import { useState, useEffect } from "react";
 
+// URL base de la API en Render
 const API = "https://api-miguel-montalvo.onrender.com";
+
+// Contraseña que exige el backend en el header de cada petición
 const PASSWORD = "sena2026";
 
+// Headers que van en todas las peticiones HTTP
+// Content-Type le dice al servidor que enviamos JSON
+// password es el header de autenticación personalizado
 const headers = {
   "Content-Type": "application/json",
   password: PASSWORD,
 };
 
-// ── utilidad fetch ──────────────────────────────────────────
+// ============================================================
+// FUNCIÓN UTILITARIA: api()
+// Centraliza todas las peticiones fetch para no repetir código.
+// Recibe: método HTTP, ruta del endpoint, y body opcional
+// Retorna: la respuesta ya convertida a JSON
+// ============================================================
 async function api(method, path, body) {
   const res = await fetch(API + path, {
     method,
     headers,
+    // Solo incluimos el body si se proporcionó (GET y DELETE no tienen body)
     body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();
 }
 
-// ── iconos svg inline ───────────────────────────────────────
+// ============================================================
+// ICONOS SVG INLINE
+// En lugar de instalar una librería de iconos, definimos
+// los SVG directamente como componentes de React.
+// Esto reduce el tamaño del bundle final.
+// ============================================================
 const Icon = {
   user: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
@@ -65,9 +92,21 @@ const Icon = {
   ),
 };
 
-// ── componente Toast ────────────────────────────────────────
+// ============================================================
+// COMPONENTE: Toast
+// Muestra una notificación temporal en la esquina inferior derecha.
+// Desaparece solo después de 3 segundos.
+//
+// Props:
+//   msg     → texto del mensaje
+//   type    → "ok" (verde) o "err" (rojo)
+//   onClose → función para cerrarlo manualmente
+// ============================================================
 function Toast({ msg, type, onClose }) {
+  // useEffect con setTimeout para cerrar automáticamente a los 3 segundos
+  // El return limpia el timeout si el componente se desmonta antes
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, []);
+
   const color = type === "ok" ? "bg-emerald-500" : "bg-red-500";
   return (
     <div className={`fixed bottom-6 right-6 z-50 ${color} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium animate-bounce`}>
@@ -77,19 +116,39 @@ function Toast({ msg, type, onClose }) {
   );
 }
 
-// ── componente Modal formulario ─────────────────────────────
+// ============================================================
+// COMPONENTE: Modal
+// Ventana emergente con un formulario para crear o editar registros.
+// Es genérico: funciona para usuarios, productos, pedidos y ventas.
+//
+// Props:
+//   title    → título del modal ("Nuevo Usuario", "Editar Producto", etc.)
+//   fields   → array con la configuración de los campos del formulario
+//   values   → objeto con los valores actuales de cada campo
+//   onChange → función para actualizar un valor cuando el usuario escribe
+//   onSave   → función que se ejecuta al hacer click en "Guardar"
+//   onClose  → función para cerrar el modal
+//   loading  → booleano para deshabilitar el botón mientras guarda
+// ============================================================
 function Modal({ title, fields, values, onChange, onSave, onClose, loading }) {
   return (
+    // Fondo oscuro con blur que cubre toda la pantalla
     <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md shadow-2xl">
+
+        {/* Cabecera del modal */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#30363d]">
           <h3 className="text-white font-bold text-lg">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition">{Icon.close}</button>
         </div>
+
+        {/* Campos del formulario - se generan dinámicamente según el array "fields" */}
         <div className="p-6 space-y-4">
           {fields.map(f => (
             <div key={f.key}>
               <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider">{f.label}</label>
+
+              {/* Si el campo es tipo "select", mostramos un dropdown, si no un input */}
               {f.type === "select" ? (
                 <select
                   value={values[f.key] || ""}
@@ -111,6 +170,8 @@ function Modal({ title, fields, values, onChange, onSave, onClose, loading }) {
             </div>
           ))}
         </div>
+
+        {/* Botones de acción */}
         <div className="flex gap-3 px-6 pb-6">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#30363d] text-gray-400 hover:text-white hover:border-gray-500 text-sm transition">
             Cancelar
@@ -125,57 +186,86 @@ function Modal({ title, fields, values, onChange, onSave, onClose, loading }) {
   );
 }
 
-// ── módulo genérico ─────────────────────────────────────────
-function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState(null); // null | { mode: 'crear'|'editar', values, id }
-  const [toast, setToast] = useState(null);
-  const [saving, setSaving] = useState(false);
+// ============================================================
+// COMPONENTE: Modulo
+// El componente más importante. Maneja todo el CRUD de un módulo
+// (usuarios, productos, pedidos o ventas).
+// Es genérico: recibe la configuración por props y funciona igual
+// para cualquier módulo.
+//
+// Props:
+//   nombre   → nombre del módulo ("Usuarios", "Productos", etc.)
+//   color    → color del tema (blue, green, purple, yellow)
+//   icon     → icono SVG del módulo
+//   endpoint → ruta de la API ("/usuarios", "/productos", etc.)
+//   fields   → configuración de los campos del formulario
+//   columns  → configuración de las columnas de la tabla
+// ============================================================
+function Modulo({ nombre, color, icon, endpoint, fields, columns }) {
+  const [data,    setData]    = useState([]);         // Array con los registros cargados
+  const [loading, setLoading] = useState(false);       // Indica si está cargando datos
+  const [modal,   setModal]   = useState(null);        // null = cerrado, objeto = abierto
+  const [toast,   setToast]   = useState(null);        // Notificación temporal
+  const [saving,  setSaving]  = useState(false);       // Indica si está guardando
 
-  const toast_ok = msg => setToast({ msg, type: "ok" });
+  // Funciones auxiliares para mostrar notificaciones
+  const toast_ok  = msg => setToast({ msg, type: "ok" });
   const toast_err = msg => setToast({ msg, type: "err" });
 
+  // Carga los datos desde la API
   async function cargar() {
     setLoading(true);
     const res = await api("GET", endpoint);
+    // Si la respuesta es un array la usamos, si no ponemos array vacío
     setData(Array.isArray(res) ? res : []);
     setLoading(false);
   }
 
+  // useEffect sin dependencias → se ejecuta solo una vez cuando el componente carga
+  // Carga los datos iniciales del módulo
   useEffect(() => { cargar(); }, []);
 
+  // Abre el modal para crear un nuevo registro
+  // Crea un objeto vacío con todas las keys de los fields
   function abrirCrear() {
     const empty = {};
     fields.forEach(f => empty[f.key] = "");
     setModal({ mode: "crear", values: empty });
   }
 
+  // Abre el modal para editar un registro existente
+  // Pre-llena el formulario con los valores actuales del registro
   function abrirEditar(row) {
     const vals = {};
     fields.forEach(f => vals[f.key] = row[f.key] ?? "");
     setModal({ mode: "editar", values: vals, id: row.id });
   }
 
+  // Guarda un registro (crear o editar según el mode del modal)
   async function guardar() {
     setSaving(true);
-    const body = { ...modal.values };
+    const body = { ...modal.values }; // Copiamos los valores del formulario
     let res;
+
     if (modal.mode === "crear") {
       res = await api("POST", endpoint, body);
     } else {
+      // En editar, incluimos el ID en la URL
       res = await api("PUT", `${endpoint}/${modal.id}`, body);
     }
+
     setSaving(false);
+
     if (res.success) {
       toast_ok(modal.mode === "crear" ? "Creado correctamente" : "Actualizado correctamente");
-      setModal(null);
-      cargar();
+      setModal(null);  // Cerramos el modal
+      cargar();        // Recargamos la tabla con los datos actualizados
     } else {
       toast_err(res.message || "Error al guardar");
     }
   }
 
+  // Elimina un registro después de confirmar
   async function eliminar(id) {
     if (!confirm("¿Seguro que quieres eliminar este registro?")) return;
     const res = await api("DELETE", `${endpoint}/${id}`);
@@ -183,6 +273,7 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
     else toast_err(res.message || "Error al eliminar");
   }
 
+  // Mapa de colores por módulo para aplicar el tema correspondiente
   const colorMap = {
     blue:   { badge: "bg-blue-500/10 text-blue-400 border-blue-500/20",   dot: "bg-blue-400",   btn: "bg-blue-600 hover:bg-blue-500",   head: "text-blue-400" },
     green:  { badge: "bg-green-500/10 text-green-400 border-green-500/20", dot: "bg-green-400",  btn: "bg-green-600 hover:bg-green-500",  head: "text-green-400" },
@@ -193,14 +284,15 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
 
   return (
     <div className="bg-[#161b22] border border-[#30363d] rounded-2xl overflow-hidden">
-      {/* header */}
+
+      {/* Cabecera de la tarjeta con título y botón "Nuevo" */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#30363d]">
         <div className="flex items-center gap-3">
           <span className={`p-2 rounded-lg ${c.badge} border`}>{icon}</span>
           <div>
             <h2 className={`font-bold text-lg ${c.head}`}>{nombre}</h2>
-            <p  className="text-xs text-gray-500">
-                {loading ? "Cargando..." : `${data.length} registros`}
+            <p className="text-xs text-gray-500">
+              {loading ? "Cargando..." : `${data.length} registros`}
             </p>
           </div>
         </div>
@@ -210,16 +302,19 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
         </button>
       </div>
 
-      {/* tabla */}
+      {/* Tabla de datos */}
       <div className="overflow-x-auto">
         {loading ? (
+          // Estado de carga
           <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Cargando...</div>
         ) : data.length === 0 ? (
+          // Sin datos
           <div className="flex items-center justify-center py-16 text-gray-600 text-sm">Sin registros aún</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#21262d]">
+                {/* Generamos los encabezados dinámicamente desde el array columns */}
                 {columns.map(col => (
                   <th key={col.key} className="text-left px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">
                     {col.label}
@@ -233,17 +328,20 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
                 <tr key={row.id || i} className="border-b border-[#21262d] hover:bg-[#1c2128] transition-colors">
                   {columns.map(col => (
                     <td key={col.key} className="px-4 py-3 text-gray-300">
+                      {/* Si la columna tiene badge, mostramos el valor con estilo especial */}
                       {col.badge ? (
                         <span className={`px-2 py-1 rounded-md text-xs font-medium border ${
                           col.badgeMap?.[row[col.key]] || c.badge
                         }`}>{row[col.key]}</span>
                       ) : col.key === "id" ? (
+                        // El ID lo mostramos con formato especial (#1, #2, etc.)
                         <span className="text-gray-600 font-mono text-xs">#{row[col.key]}</span>
                       ) : (
                         <span>{row[col.key] ?? "—"}</span>
                       )}
                     </td>
                   ))}
+                  {/* Botones de editar y eliminar por fila */}
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => abrirEditar(row)}
@@ -263,7 +361,7 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
         )}
       </div>
 
-      {/* modal */}
+      {/* Modal de crear/editar - solo se renderiza si modal no es null */}
       {modal && (
         <Modal
           title={modal.mode === "crear" ? `Nuevo ${nombre.slice(0,-1)}` : `Editar ${nombre.slice(0,-1)}`}
@@ -276,13 +374,16 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns, rowKey }) {
         />
       )}
 
-      {/* toast */}
+      {/* Toast de notificación - solo se renderiza si toast no es null */}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
 
-// ── App principal ───────────────────────────────────────────
+// ============================================================
+// CONFIGURACIÓN DE TABS
+// Cada tab corresponde a un módulo de la app
+// ============================================================
 const TABS = [
   { key: "usuarios",  label: "Usuarios",  color: "blue",   icon: Icon.user  },
   { key: "productos", label: "Productos", color: "green",  icon: Icon.box   },
@@ -290,6 +391,12 @@ const TABS = [
   { key: "ventas",    label: "Ventas",    color: "yellow", icon: Icon.money },
 ];
 
+// ============================================================
+// CONFIGURACIÓN DE MÓDULOS
+// Define los campos del formulario y las columnas de la tabla
+// para cada módulo. Esto hace que el componente Modulo sea
+// completamente reutilizable.
+// ============================================================
 const CONFIG = {
   usuarios: {
     endpoint: "/usuarios",
@@ -355,6 +462,7 @@ const CONFIG = {
       { key: "total",      label: "Total" },
       { key: "metodoPago", label: "Método" },
       { key: "estado",     label: "Estado", badge: true,
+        // badgeMap define el estilo de color para cada valor posible del estado
         badgeMap: {
           completada: "bg-green-500/10 text-green-400 border border-green-500/20",
           pendiente:  "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
@@ -365,16 +473,24 @@ const CONFIG = {
   },
 };
 
+// ============================================================
+// COMPONENTE PRINCIPAL: App
+// Maneja la navegación por tabs y renderiza el módulo activo
+// ============================================================
 export default function App() {
+  // Estado del tab activo, por defecto "usuarios"
   const [tab, setTab] = useState("usuarios");
+
+  // Obtenemos la configuración y los datos del tab activo
   const cfg = CONFIG[tab];
-  const t = TABS.find(t => t.key === tab);
+  const t   = TABS.find(t => t.key === tab);
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white" style={{ fontFamily: "'DM Mono', monospace" }}>
+      {/* Fuentes de Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
 
-      {/* header */}
+      {/* HEADER - barra superior con título y estado de la API */}
       <header className="border-b border-[#21262d] bg-[#0d1117]/80 backdrop-blur-sm sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div>
@@ -384,6 +500,7 @@ export default function App() {
             </h1>
             <p className="text-xs text-gray-600 tracking-widest uppercase">ADSO SENA · Panel de gestión</p>
           </div>
+          {/* Indicador de que la API está conectada */}
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="text-xs text-gray-500">API conectada</span>
@@ -391,13 +508,13 @@ export default function App() {
         </div>
       </header>
 
-      {/* tabs */}
+      {/* TABS DE NAVEGACIÓN */}
       <div className="border-b border-[#21262d] bg-[#0d1117]">
         <div className="max-w-6xl mx-auto px-6 flex gap-1 overflow-x-auto">
           {TABS.map(t => {
             const active = tab === t.key;
             const colorLine = { blue: "border-blue-400", green: "border-green-400", purple: "border-purple-400", yellow: "border-yellow-400" };
-            const colorText = { blue: "text-blue-400", green: "text-green-400", purple: "text-purple-400", yellow: "text-yellow-400" };
+            const colorText = { blue: "text-blue-400",   green: "text-green-400",   purple: "text-purple-400",  yellow: "text-yellow-400"  };
             return (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
@@ -412,8 +529,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* contenido */}
+      {/* CONTENIDO PRINCIPAL - renderiza el módulo activo */}
       <main className="max-w-6xl mx-auto px-6 py-8">
+        {/*
+          key={tab} hace que React destruya y recree el componente
+          cada vez que cambiamos de tab, así recarga los datos frescos
+        */}
         <Modulo
           key={tab}
           nombre={t.label}
@@ -425,7 +546,7 @@ export default function App() {
         />
       </main>
 
-      {/* footer */}
+      {/* FOOTER */}
       <footer className="border-t border-[#21262d] mt-16 py-6 text-center text-xs text-gray-700">
         Davier Quinto · Manuela Córdoba · Luis Miguel Montalvo — SENA 2026
       </footer>
