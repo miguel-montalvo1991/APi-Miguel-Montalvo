@@ -547,7 +547,8 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-[#21262d] mt-16 py-6 text-center text-xs text-gray-700">
+      <footer className="border-t border-white/10 mt-16 py-6 text-center text-xs text-white/30" 
+      style={{ background: "rgba(5,10,30,0.4)", backdropFilter: "blur(20px)" }}>
       
                               Luis Miguel Montalvo — SENA 2026
       </footer>
