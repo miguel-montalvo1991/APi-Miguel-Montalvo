@@ -1,184 +1,251 @@
 // ============================================================
 // src/App.jsx - Componente principal del frontend
-//
-// Este archivo contiene TODA la lógica del panel de gestión:
-// - Conexión con la API
-// - Componentes reutilizables (Toast, Modal, Modulo)
-// - Configuración de cada módulo (usuarios, productos, etc.)
-// - La App principal con tabs y navegación
+// Estilo: Futurista con glassmorphism, tipografía Orbitron,
+// esquinas decorativas, botones con bisel y cuadrícula de fondo
 // ============================================================
 
 import { useState, useEffect } from "react";
 
-// URL base de la API en Render
-const API = "https://api-miguel-montalvo.onrender.com";
-
-// Contraseña que exige el backend en el header de cada petición
+const API      = "https://api-miguel-montalvo.onrender.com";
 const PASSWORD = "sena2026";
 
-// Headers que van en todas las peticiones HTTP
-// Content-Type le dice al servidor que enviamos JSON
-// password es el header de autenticación personalizado
 const headers = {
   "Content-Type": "application/json",
   password: PASSWORD,
 };
 
-// ============================================================
-// FUNCIÓN UTILITARIA: api()
-// Centraliza todas las peticiones fetch para no repetir código.
-// Recibe: método HTTP, ruta del endpoint, y body opcional
-// Retorna: la respuesta ya convertida a JSON
-// ============================================================
 async function api(method, path, body) {
   const res = await fetch(API + path, {
     method,
     headers,
-    // Solo incluimos el body si se proporcionó (GET y DELETE no tienen body)
     body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();
 }
 
-// ============================================================
-// ICONOS SVG INLINE
-// En lugar de instalar una librería de iconos, definimos
-// los SVG directamente como componentes de React.
-// Esto reduce el tamaño del bundle final.
-// ============================================================
+// Estilos globales futuristas inyectados en el head
+const globalStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Rajdhani', sans-serif !important;
+    background:
+      linear-gradient(180deg, rgba(0,5,20,0.72) 0%, rgba(0,8,28,0.55) 50%, rgba(0,5,20,0.78) 100%),
+      url('/galaxia.jpg') center/cover fixed no-repeat !important;
+    min-height: 100vh;
+  }
+
+  .orbitron { font-family: 'Orbitron', monospace !important; }
+  .rajdhani { font-family: 'Rajdhani', sans-serif !important; }
+
+  /* Cuadrícula de fondo */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Esquinas decorativas reutilizables */
+  .corner-box { position: relative; }
+  .corner-box::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px;
+    width: 18px; height: 18px;
+    border-top: 2px solid #00c8ff;
+    border-left: 2px solid #00c8ff;
+    box-shadow: -2px -2px 8px rgba(0,200,255,0.3);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .corner-box::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; right: -1px;
+    width: 18px; height: 18px;
+    border-bottom: 2px solid #00c8ff;
+    border-right: 2px solid #00c8ff;
+    box-shadow: 2px 2px 8px rgba(0,200,255,0.3);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* Chip de bisel */
+  .bisel {
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  .bisel-sm {
+    clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+  }
+
+  /* Scrollbar futurista */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: rgba(0,200,255,0.02); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.4); }
+
+  /* Animaciones */
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  @keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+
+  /* Hover en filas de tabla */
+  .fila-hover:hover {
+    background: rgba(0,200,255,0.04) !important;
+    box-shadow: inset 3px 0 0 rgba(0,200,255,0.4) !important;
+  }
+
+  /* Input y select futuristas */
+  .input-futuro {
+    background: rgba(0,200,255,0.05) !important;
+    border: 1px solid rgba(0,200,255,0.2) !important;
+    color: #c8e8ff !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 0.9rem !important;
+    letter-spacing: 1px !important;
+    transition: all 0.2s !important;
+  }
+  .input-futuro:focus {
+    border-color: rgba(0,200,255,0.5) !important;
+    box-shadow: 0 0 15px rgba(0,200,255,0.1) !important;
+    outline: none !important;
+  }
+  .input-futuro::placeholder { color: rgba(0,200,255,0.25) !important; }
+  .input-futuro option { background: #000d1f; }
+`;
+
+// Iconos SVG
 const Icon = {
-  user: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-  box: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    </svg>
-  ),
-  cart: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-    </svg>
-  ),
-  money: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-      <rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" />
-    </svg>
-  ),
-  trash: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-      <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
-    </svg>
-  ),
-  edit: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  ),
-  plus: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  ),
-  close: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  ),
+  user: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:18,height:18}}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>),
+  box:  (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:18,height:18}}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>),
+  cart: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:18,height:18}}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>),
+  money:(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:18,height:18}}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>),
+  trash:(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:13,height:13}}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>),
+  edit: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:13,height:13}}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>),
+  plus: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} style={{width:13,height:13}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>),
+  close:(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{width:18,height:18}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
 };
 
 // ============================================================
-// COMPONENTE: Toast
-// Muestra una notificación temporal en la esquina inferior derecha.
-// Desaparece solo después de 3 segundos.
-//
-// Props:
-//   msg     → texto del mensaje
-//   type    → "ok" (verde) o "err" (rojo)
-//   onClose → función para cerrarlo manualmente
+// COMPONENTE: Toast futurista
 // ============================================================
 function Toast({ msg, type, onClose }) {
-  // useEffect con setTimeout para cerrar automáticamente a los 3 segundos
-  // El return limpia el timeout si el componente se desmonta antes
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, []);
-
-  const color = type === "ok" ? "bg-emerald-500" : "bg-red-500";
+  const isOk = type === "ok";
   return (
-    <div className={`fixed bottom-6 right-6 z-50 ${color} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium animate-bounce`}>
+    <div style={{
+      position: "fixed", bottom: 24, right: 24, zIndex: 9999,
+      display: "flex", alignItems: "center", gap: 12,
+      padding: "10px 20px",
+      background: isOk ? "rgba(0,255,150,0.08)" : "rgba(255,50,80,0.08)",
+      border: `1px solid ${isOk ? "rgba(0,255,150,0.3)" : "rgba(255,50,80,0.3)"}`,
+      color: isOk ? "#00ff96" : "#ff6b8a",
+      fontFamily: "'Rajdhani', sans-serif",
+      fontSize: "0.88rem", fontWeight: 600, letterSpacing: "1px",
+      backdropFilter: "blur(20px)",
+      clipPath: "polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)",
+      boxShadow: `0 0 20px ${isOk ? "rgba(0,255,150,0.15)" : "rgba(255,50,80,0.15)"}`,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: isOk ? "#00ff96" : "#ff6b8a", boxShadow: `0 0 8px ${isOk ? "#00ff96" : "#ff6b8a"}` }} />
       {msg}
-      <button onClick={onClose} className="opacity-70 hover:opacity-100">{Icon.close}</button>
+      <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, marginLeft: 4 }}>{Icon.close}</button>
     </div>
   );
 }
 
 // ============================================================
-// COMPONENTE: Modal
-// Ventana emergente con un formulario para crear o editar registros.
-// Es genérico: funciona para usuarios, productos, pedidos y ventas.
-//
-// Props:
-//   title    → título del modal ("Nuevo Usuario", "Editar Producto", etc.)
-//   fields   → array con la configuración de los campos del formulario
-//   values   → objeto con los valores actuales de cada campo
-//   onChange → función para actualizar un valor cuando el usuario escribe
-//   onSave   → función que se ejecuta al hacer click en "Guardar"
-//   onClose  → función para cerrar el modal
-//   loading  → booleano para deshabilitar el botón mientras guarda
+// COMPONENTE: Modal futurista
 // ============================================================
 function Modal({ title, fields, values, onChange, onSave, onClose, loading }) {
   return (
-    // Fondo oscuro con blur que cubre toda la pantalla
-    <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md shadow-2xl">
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 999,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+      background: "rgba(0,5,20,0.75)", backdropFilter: "blur(10px)",
+    }}>
+      <div className="corner-box" style={{
+        width: "100%", maxWidth: 440,
+        background: "rgba(0,10,35,0.85)",
+        backdropFilter: "blur(40px)",
+        border: "1px solid rgba(0,200,255,0.2)",
+        boxShadow: "0 0 60px rgba(0,200,255,0.08), 0 24px 64px rgba(0,0,0,0.6)",
+        overflow: "hidden",
+      }}>
+        {/* Barra superior */}
+        <div style={{ height: 2, background: "linear-gradient(90deg, transparent, #00c8ff 40%, #7b2fff 60%, transparent)" }} />
 
-        {/* Cabecera del modal */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#30363d]">
-          <h3 className="text-white font-bold text-lg">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition">{Icon.close}</button>
+        {/* Header del modal */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "1rem 1.5rem",
+          borderBottom: "1px solid rgba(0,200,255,0.1)",
+          background: "rgba(0,200,255,0.025)",
+        }}>
+          <span className="orbitron" style={{ fontSize: "0.8rem", letterSpacing: 3, color: "#00c8ff", textShadow: "0 0 10px rgba(0,200,255,0.4)" }}>
+            {title.toUpperCase()}
+          </span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(0,200,255,0.4)" }}
+            onMouseEnter={e => e.currentTarget.style.color = "#00c8ff"}
+            onMouseLeave={e => e.currentTarget.style.color = "rgba(0,200,255,0.4)"}>
+            {Icon.close}
+          </button>
         </div>
 
-        {/* Campos del formulario - se generan dinámicamente según el array "fields" */}
-        <div className="p-6 space-y-4">
+        {/* Campos */}
+        <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: 16 }}>
           {fields.map(f => (
             <div key={f.key}>
-              <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider">{f.label}</label>
-
-              {/* Si el campo es tipo "select", mostramos un dropdown, si no un input */}
+              <label className="orbitron" style={{ display: "block", fontSize: "0.55rem", letterSpacing: 3, color: "rgba(0,200,255,0.45)", marginBottom: 6, textTransform: "uppercase" }}>
+                {f.label}
+              </label>
               {f.type === "select" ? (
-                <select
-                  value={values[f.key] || ""}
-                  onChange={e => onChange(f.key, e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                >
+                <select value={values[f.key] || ""} onChange={e => onChange(f.key, e.target.value)}
+                  className="input-futuro"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 2 }}>
                   <option value="">Seleccionar...</option>
                   {f.options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : (
-                <input
-                  type={f.type || "text"}
-                  value={values[f.key] || ""}
+                <input type={f.type || "text"} value={values[f.key] || ""}
                   onChange={e => onChange(f.key, e.target.value)}
                   placeholder={f.placeholder || ""}
-                  className="w-full bg-[#0d1117] border border-[#30363d] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                  className="input-futuro"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 2 }}
                 />
               )}
             </div>
           ))}
         </div>
 
-        {/* Botones de acción */}
-        <div className="flex gap-3 px-6 pb-6">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-[#30363d] text-gray-400 hover:text-white hover:border-gray-500 text-sm transition">
+        {/* Botones */}
+        <div style={{ display: "flex", gap: 10, padding: "0 1.5rem 1.5rem" }}>
+          <button onClick={onClose} className="bisel rajdhani" style={{
+            flex: 1, padding: "8px", fontSize: "0.82rem", fontWeight: 600, letterSpacing: 2,
+            textTransform: "uppercase", cursor: "pointer", transition: "all 0.2s",
+            background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.3)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.3)"; }}>
             Cancelar
           </button>
-          <button onClick={onSave} disabled={loading}
-            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition disabled:opacity-50">
-            {loading ? "Guardando..." : "Guardar"}
+          <button onClick={onSave} disabled={loading} className="bisel rajdhani" style={{
+            flex: 1, padding: "8px", fontSize: "0.82rem", fontWeight: 600, letterSpacing: 2,
+            textTransform: "uppercase", cursor: "pointer", transition: "all 0.2s",
+            background: "rgba(0,200,255,0.1)", border: "1px solid rgba(0,200,255,0.4)", color: "#00c8ff",
+            textShadow: "0 0 10px rgba(0,200,255,0.4)", opacity: loading ? 0.5 : 1,
+          }}
+          onMouseEnter={e => { if(!loading){ e.currentTarget.style.background = "rgba(0,200,255,0.18)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(0,200,255,0.2)"; }}}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,200,255,0.1)"; e.currentTarget.style.boxShadow = "none"; }}>
+            {loading ? "Procesando..." : "Confirmar"}
           </button>
         </div>
       </div>
@@ -187,169 +254,198 @@ function Modal({ title, fields, values, onChange, onSave, onClose, loading }) {
 }
 
 // ============================================================
-// COMPONENTE: Modulo
-// El componente más importante. Maneja todo el CRUD de un módulo
-// (usuarios, productos, pedidos o ventas).
-// Es genérico: recibe la configuración por props y funciona igual
-// para cualquier módulo.
-//
-// Props:
-//   nombre   → nombre del módulo ("Usuarios", "Productos", etc.)
-//   color    → color del tema (blue, green, purple, yellow)
-//   icon     → icono SVG del módulo
-//   endpoint → ruta de la API ("/usuarios", "/productos", etc.)
-//   fields   → configuración de los campos del formulario
-//   columns  → configuración de las columnas de la tabla
+// COMPONENTE: Modulo con estilo futurista completo
 // ============================================================
 function Modulo({ nombre, color, icon, endpoint, fields, columns }) {
-  const [data,    setData]    = useState([]);         // Array con los registros cargados
-  const [loading, setLoading] = useState(false);       // Indica si está cargando datos
-  const [modal,   setModal]   = useState(null);        // null = cerrado, objeto = abierto
-  const [toast,   setToast]   = useState(null);        // Notificación temporal
-  const [saving,  setSaving]  = useState(false);       // Indica si está guardando
+  const [data,    setData]    = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modal,   setModal]   = useState(null);
+  const [toast,   setToast]   = useState(null);
+  const [saving,  setSaving]  = useState(false);
 
-  // Funciones auxiliares para mostrar notificaciones
   const toast_ok  = msg => setToast({ msg, type: "ok" });
   const toast_err = msg => setToast({ msg, type: "err" });
 
-  // Carga los datos desde la API
   async function cargar() {
     setLoading(true);
     const res = await api("GET", endpoint);
-    // Si la respuesta es un array la usamos, si no ponemos array vacío
     setData(Array.isArray(res) ? res : []);
     setLoading(false);
   }
 
-  // useEffect sin dependencias → se ejecuta solo una vez cuando el componente carga
-  // Carga los datos iniciales del módulo
   useEffect(() => { cargar(); }, []);
 
-  // Abre el modal para crear un nuevo registro
-  // Crea un objeto vacío con todas las keys de los fields
   function abrirCrear() {
     const empty = {};
     fields.forEach(f => empty[f.key] = "");
     setModal({ mode: "crear", values: empty });
   }
 
-  // Abre el modal para editar un registro existente
-  // Pre-llena el formulario con los valores actuales del registro
   function abrirEditar(row) {
     const vals = {};
     fields.forEach(f => vals[f.key] = row[f.key] ?? "");
     setModal({ mode: "editar", values: vals, id: row.id });
   }
 
-  // Guarda un registro (crear o editar según el mode del modal)
   async function guardar() {
     setSaving(true);
-    const body = { ...modal.values }; // Copiamos los valores del formulario
+    const body = { ...modal.values };
     let res;
-
     if (modal.mode === "crear") {
       res = await api("POST", endpoint, body);
     } else {
-      // En editar, incluimos el ID en la URL
       res = await api("PUT", `${endpoint}/${modal.id}`, body);
     }
-
     setSaving(false);
-
     if (res.success) {
-      toast_ok(modal.mode === "crear" ? "Creado correctamente" : "Actualizado correctamente");
-      setModal(null);  // Cerramos el modal
-      cargar();        // Recargamos la tabla con los datos actualizados
+      toast_ok(modal.mode === "crear" ? "Registro creado" : "Registro actualizado");
+      setModal(null);
+      cargar();
     } else {
       toast_err(res.message || "Error al guardar");
     }
   }
 
-  // Elimina un registro después de confirmar
   async function eliminar(id) {
-    if (!confirm("¿Seguro que quieres eliminar este registro?")) return;
+    if (!confirm("¿Confirmar eliminación del registro?")) return;
     const res = await api("DELETE", `${endpoint}/${id}`);
-    if (res.success) { toast_ok("Eliminado correctamente"); cargar(); }
+    if (res.success) { toast_ok("Registro eliminado"); cargar(); }
     else toast_err(res.message || "Error al eliminar");
   }
 
-  // Mapa de colores por módulo para aplicar el tema correspondiente
+  // Colores por módulo
   const colorMap = {
-    blue:   { badge: "bg-blue-500/10 text-blue-400 border-blue-500/20",   dot: "bg-blue-400",   btn: "bg-blue-600 hover:bg-blue-500",   head: "text-blue-400" },
-    green:  { badge: "bg-green-500/10 text-green-400 border-green-500/20", dot: "bg-green-400",  btn: "bg-green-600 hover:bg-green-500",  head: "text-green-400" },
-    purple: { badge: "bg-purple-500/10 text-purple-400 border-purple-500/20", dot: "bg-purple-400", btn: "bg-purple-600 hover:bg-purple-500", head: "text-purple-400" },
-    yellow: { badge: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20", dot: "bg-yellow-400", btn: "bg-yellow-600 hover:bg-yellow-500", head: "text-yellow-400" },
+    blue:   { main: "#00c8ff", glow: "rgba(0,200,255,0.3)",   bg: "rgba(0,200,255,0.08)",   border: "rgba(0,200,255,0.25)",   grad: "#7b2fff" },
+    green:  { main: "#00ff96", glow: "rgba(0,255,150,0.3)",   bg: "rgba(0,255,150,0.08)",   border: "rgba(0,255,150,0.25)",   grad: "#00c8ff" },
+    purple: { main: "#c084fc", glow: "rgba(192,132,252,0.3)", bg: "rgba(192,132,252,0.08)", border: "rgba(192,132,252,0.25)", grad: "#f472b6" },
+    yellow: { main: "#fbbf24", glow: "rgba(251,191,36,0.3)",  bg: "rgba(251,191,36,0.08)",  border: "rgba(251,191,36,0.25)",  grad: "#f97316" },
   };
   const c = colorMap[color];
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-2xl overflow-hidden">
+    <div className="corner-box" style={{
+      borderRadius: 4, overflow: "visible",
+      background: "rgba(0,10,35,0.42)",
+      backdropFilter: "blur(40px)",
+      WebkitBackdropFilter: "blur(40px)",
+      border: `1px solid ${c.border}`,
+      boxShadow: `0 0 0 1px rgba(255,255,255,0.03) inset, 0 20px 60px rgba(0,0,0,0.5), 0 0 40px ${c.glow.replace("0.3","0.05")}`,
+    }}>
+      {/* Barra superior con gradiente del color del módulo */}
+      <div style={{ height: 2, background: `linear-gradient(90deg, transparent, ${c.main} 30%, ${c.grad} 70%, transparent)`, boxShadow: `0 0 12px ${c.glow}` }} />
 
-      {/* Cabecera de la tarjeta con título y botón "Nuevo" */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#30363d]">
-        <div className="flex items-center gap-3">
-          <span className={`p-2 rounded-lg ${c.badge} border`}>{icon}</span>
+      {/* Header de la tarjeta */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "1.2rem 1.6rem",
+        background: `${c.bg.replace("0.08","0.025")}`,
+        borderBottom: `1px solid ${c.border.replace("0.25","0.12")}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{
+            width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center",
+            background: c.bg, border: `1px solid ${c.border}`,
+            color: c.main,
+            clipPath: "polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%)",
+            boxShadow: `inset 0 0 20px ${c.glow.replace("0.3","0.08")}`,
+          }}>
+            {icon}
+          </div>
           <div>
-            <h2 className={`font-bold text-lg ${c.head}`}>{nombre}</h2>
-            <p className="text-xs text-gray-500">
-              {loading ? "Cargando..." : `${data.length} registros`}
-            </p>
+            <div className="orbitron" style={{ fontSize: "0.9rem", fontWeight: 700, letterSpacing: 3, color: c.main, textShadow: `0 0 15px ${c.glow}` }}>
+              {nombre.toUpperCase()}
+            </div>
+            <div className="rajdhani" style={{ fontSize: "0.68rem", letterSpacing: 2, color: `${c.main}66`, marginTop: 2 }}>
+              {loading ? "Cargando..." : `${data.length} registros activos`}
+            </div>
           </div>
         </div>
-        <button onClick={abrirCrear}
-          className={`flex items-center gap-2 ${c.btn} text-white text-sm font-semibold px-4 py-2 rounded-lg transition`}>
+
+        <button onClick={abrirCrear} className="bisel rajdhani"
+          style={{
+            display: "flex", alignItems: "center", gap: 7,
+            padding: "8px 18px", fontSize: "0.82rem", fontWeight: 600,
+            letterSpacing: 2, textTransform: "uppercase", cursor: "pointer",
+            color: c.main, background: c.bg, border: `1px solid ${c.border}`,
+            textShadow: `0 0 10px ${c.glow}`, transition: "all 0.25s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = c.bg.replace("0.08","0.15"); e.currentTarget.style.boxShadow = `0 0 20px ${c.glow}`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = c.bg; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
           {Icon.plus} Nuevo
         </button>
       </div>
 
-      {/* Tabla de datos */}
-      <div className="overflow-x-auto">
+      {/* Tabla */}
+      <div style={{ overflowX: "auto" }}>
         {loading ? (
-          // Estado de carga
-          <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Cargando...</div>
+          <div className="orbitron" style={{ padding: "4rem", textAlign: "center", fontSize: "0.65rem", letterSpacing: 4, color: `${c.main}44` }}>
+            Cargando datos...
+          </div>
         ) : data.length === 0 ? (
-          // Sin datos
-          <div className="flex items-center justify-center py-16 text-gray-600 text-sm">Sin registros aún</div>
+          <div className="orbitron" style={{ padding: "4rem", textAlign: "center", fontSize: "0.65rem", letterSpacing: 4, color: "rgba(255,255,255,0.15)" }}>
+            Sin registros aún
+          </div>
         ) : (
-          <table className="w-full text-sm">
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
             <thead>
-              <tr className="border-b border-[#21262d]">
-                {/* Generamos los encabezados dinámicamente desde el array columns */}
+              <tr style={{ borderBottom: `1px solid ${c.border.replace("0.25","0.1")}` }}>
                 {columns.map(col => (
-                  <th key={col.key} className="text-left px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">
-                    {col.label}
-                  </th>
+                  <th key={col.key} className="orbitron" style={{
+                    padding: "0.85rem 1.3rem", textAlign: "left",
+                    fontSize: "0.52rem", letterSpacing: 3, fontWeight: 400,
+                    color: `${c.main}55`, textTransform: "uppercase",
+                  }}>{col.label}</th>
                 ))}
-                <th className="text-right px-4 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Acciones</th>
+                <th className="orbitron" style={{
+                  padding: "0.85rem 1.3rem", textAlign: "right",
+                  fontSize: "0.52rem", letterSpacing: 3, fontWeight: 400,
+                  color: `${c.main}55`, textTransform: "uppercase",
+                }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {data.map((row, i) => (
-                <tr key={row.id || i} className="border-b border-[#21262d] hover:bg-[#1c2128] transition-colors">
+                <tr key={row.id || i} className="fila-hover" style={{ borderBottom: "1px solid rgba(0,200,255,0.04)", transition: "all 0.2s" }}>
                   {columns.map(col => (
-                    <td key={col.key} className="px-4 py-3 text-gray-300">
-                      {/* Si la columna tiene badge, mostramos el valor con estilo especial */}
+                    <td key={col.key} className="rajdhani" style={{ padding: "0.95rem 1.3rem", color: "rgba(200,232,255,0.75)", fontWeight: 500 }}>
                       {col.badge ? (
-                        <span className={`px-2 py-1 rounded-md text-xs font-medium border ${
-                          col.badgeMap?.[row[col.key]] || c.badge
-                        }`}>{row[col.key]}</span>
+                        <span className="bisel-sm rajdhani" style={{
+                          fontSize: "0.78rem", fontWeight: 600, padding: "3px 12px",
+                          letterSpacing: 1,
+                          ...(col.badgeMap?.[row[col.key]] === "bg-green-500/10 text-green-400 border border-green-500/20"
+                            ? { background: "rgba(0,255,150,0.08)", border: "1px solid rgba(0,255,150,0.25)", color: "#00ff96" }
+                            : col.badgeMap?.[row[col.key]] === "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                            ? { background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", color: "#fbbf24" }
+                            : { background: "rgba(255,50,80,0.08)", border: "1px solid rgba(255,50,80,0.25)", color: "#ff6b8a" })
+                        }}>{row[col.key]}</span>
                       ) : col.key === "id" ? (
-                        // El ID lo mostramos con formato especial (#1, #2, etc.)
-                        <span className="text-gray-600 font-mono text-xs">#{row[col.key]}</span>
+                        <span className="bisel-sm orbitron" style={{
+                          fontSize: "0.6rem", fontWeight: 600, padding: "3px 10px", letterSpacing: 1,
+                          background: c.bg, border: `1px solid ${c.border}`, color: c.main,
+                        }}>#{row[col.key]}</span>
                       ) : (
                         <span>{row[col.key] ?? "—"}</span>
                       )}
                     </td>
                   ))}
-                  {/* Botones de editar y eliminar por fila */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => abrirEditar(row)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition">
+                  <td style={{ padding: "0.95rem 1.3rem" }}>
+                    <div style={{ display: "flex", gap: 7, justifyContent: "flex-end" }}>
+                      <button onClick={() => abrirEditar(row)} className="bisel-sm" style={{
+                        width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "rgba(0,200,255,0.04)", border: "1px solid rgba(0,200,255,0.15)",
+                        cursor: "pointer", color: "rgba(0,200,255,0.4)", transition: "all 0.2s",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = c.main; e.currentTarget.style.borderColor = c.border; e.currentTarget.style.background = c.bg; e.currentTarget.style.boxShadow = `0 0 12px ${c.glow}`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "rgba(0,200,255,0.4)"; e.currentTarget.style.borderColor = "rgba(0,200,255,0.15)"; e.currentTarget.style.background = "rgba(0,200,255,0.04)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
                         {Icon.edit}
                       </button>
-                      <button onClick={() => eliminar(row.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition">
+                      <button onClick={() => eliminar(row.id)} className="bisel-sm" style={{
+                        width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "rgba(255,50,80,0.04)", border: "1px solid rgba(255,50,80,0.15)",
+                        cursor: "pointer", color: "rgba(255,50,80,0.4)", transition: "all 0.2s",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#ff6b8a"; e.currentTarget.style.borderColor = "rgba(255,107,138,0.4)"; e.currentTarget.style.background = "rgba(255,50,80,0.1)"; e.currentTarget.style.boxShadow = "0 0 12px rgba(255,50,80,0.2)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,50,80,0.4)"; e.currentTarget.style.borderColor = "rgba(255,50,80,0.15)"; e.currentTarget.style.background = "rgba(255,50,80,0.04)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
                         {Icon.trash}
                       </button>
                     </div>
@@ -361,7 +457,6 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns }) {
         )}
       </div>
 
-      {/* Modal de crear/editar - solo se renderiza si modal no es null */}
       {modal && (
         <Modal
           title={modal.mode === "crear" ? `Nuevo ${nombre.slice(0,-1)}` : `Editar ${nombre.slice(0,-1)}`}
@@ -373,17 +468,12 @@ function Modulo({ nombre, color, icon, endpoint, fields, columns }) {
           loading={saving}
         />
       )}
-
-      {/* Toast de notificación - solo se renderiza si toast no es null */}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
 
-// ============================================================
-// CONFIGURACIÓN DE TABS
-// Cada tab corresponde a un módulo de la app
-// ============================================================
+// Tabs y configuración
 const TABS = [
   { key: "usuarios",  label: "Usuarios",  color: "blue",   icon: Icon.user  },
   { key: "productos", label: "Productos", color: "green",  icon: Icon.box   },
@@ -391,12 +481,6 @@ const TABS = [
   { key: "ventas",    label: "Ventas",    color: "yellow", icon: Icon.money },
 ];
 
-// ============================================================
-// CONFIGURACIÓN DE MÓDULOS
-// Define los campos del formulario y las columnas de la tabla
-// para cada módulo. Esto hace que el componente Modulo sea
-// completamente reutilizable.
-// ============================================================
 const CONFIG = {
   usuarios: {
     endpoint: "/usuarios",
@@ -462,7 +546,6 @@ const CONFIG = {
       { key: "total",      label: "Total" },
       { key: "metodoPago", label: "Método" },
       { key: "estado",     label: "Estado", badge: true,
-        // badgeMap define el estilo de color para cada valor posible del estado
         badgeMap: {
           completada: "bg-green-500/10 text-green-400 border border-green-500/20",
           pendiente:  "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
@@ -475,66 +558,113 @@ const CONFIG = {
 
 // ============================================================
 // COMPONENTE PRINCIPAL: App
-// Maneja la navegación por tabs y renderiza el módulo activo
 // ============================================================
 export default function App() {
-  // Estado del tab activo, por defecto "usuarios"
   const [tab, setTab] = useState("usuarios");
-
-  // Obtenemos la configuración y los datos del tab activo
   const cfg = CONFIG[tab];
   const t   = TABS.find(t => t.key === tab);
 
-  return (
-    <div className="min-h-screen text-white" style={{ backgroundImage: "url('/galaxia.jpg')", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
-      {/* Fuentes de Google Fonts */}
-      <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  const colorMap = {
+    blue:   { main: "#00c8ff", border: "rgba(0,200,255,0.25)" },
+    green:  { main: "#00ff96", border: "rgba(0,255,150,0.25)" },
+    purple: { main: "#c084fc", border: "rgba(192,132,252,0.25)" },
+    yellow: { main: "#fbbf24", border: "rgba(251,191,36,0.25)" },
+  };
 
-      {/* HEADER - barra superior con título y estado de la API */}
-      <header className="border-b border-[#21262d] bg-[#0d1117]/80 backdrop-blur-sm sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black tracking-tight" style={{ fontFamily: "'Syne', sans-serif" }}>
-              <span className="text-blue-400">Tienda</span>
-              <span className="text-white"> Virtual</span>
-            </h1>
-            <p className="text-xs text-gray-600 tracking-widest uppercase">ADSO SENA · Panel de gestión</p>
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", color: "#c8e8ff" }}>
+
+      {/* Estilos globales */}
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+
+      {/* Cuadrícula de fondo */}
+      <div className="bg-grid" />
+
+      {/* HEADER */}
+      <header style={{
+        position: "sticky", top: 0, zIndex: 100,
+        padding: "0.9rem 2rem",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "rgba(0,5,20,0.6)",
+        backdropFilter: "blur(30px)",
+        WebkitBackdropFilter: "blur(30px)",
+        borderBottom: "1px solid rgba(0,200,255,0.15)",
+        boxShadow: "0 0 30px rgba(0,200,255,0.04)",
+      }}>
+        {/* Logo con esquinas decorativas */}
+        <div style={{ position: "relative", padding: "6px 10px" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, width: 10, height: 10, borderTop: "1px solid rgba(0,200,255,0.6)", borderLeft: "1px solid rgba(0,200,255,0.6)" }} />
+          <div style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderBottom: "1px solid rgba(0,200,255,0.6)", borderRight: "1px solid rgba(0,200,255,0.6)" }} />
+          <div className="orbitron" style={{ fontSize: "1.2rem", fontWeight: 900, letterSpacing: 3 }}>
+            <span style={{ color: "#fff" }}>TIENDA</span>
+            <span style={{ color: "#00c8ff", textShadow: "0 0 20px rgba(0,200,255,0.6)" }}> VIRTUAL</span>
           </div>
-          {/* Indicador de que la API está conectada */}
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-xs text-gray-500">API conectada</span>
+          <div className="rajdhani" style={{ fontSize: "0.58rem", letterSpacing: 5, color: "rgba(0,200,255,0.35)", textTransform: "uppercase", marginTop: 2 }}>
+            ADSO SENA · Panel de gestión
           </div>
+        </div>
+
+        {/* Status badge */}
+        <div className="bisel rajdhani" style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "5px 18px",
+          border: "1px solid rgba(0,255,150,0.25)",
+          background: "rgba(0,255,150,0.05)",
+          fontSize: "0.75rem", fontWeight: 600, letterSpacing: 2,
+          color: "#00ff96", textTransform: "uppercase",
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00ff96", boxShadow: "0 0 10px #00ff96", animation: "blink 1.5s infinite", display: "inline-block" }} />
+          Sistema Online
         </div>
       </header>
 
-      {/* TABS DE NAVEGACIÓN */}
-      <div className="border-b border-[#21262d] bg-[#0d1117]">
-        <div className="max-w-6xl mx-auto px-6 flex gap-1 overflow-x-auto">
-          {TABS.map(t => {
-            const active = tab === t.key;
-            const colorLine = { blue: "border-blue-400", green: "border-green-400", purple: "border-purple-400", yellow: "border-yellow-400" };
-            const colorText = { blue: "text-blue-400",   green: "text-green-400",   purple: "text-purple-400",  yellow: "text-yellow-400"  };
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-                  active
-                    ? `${colorLine[t.color]} ${colorText[t.color]}`
-                    : "border-transparent text-gray-500 hover:text-gray-300"
-                }`}>
-                {t.icon} {t.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* TABS */}
+      <div style={{
+        background: "rgba(0,5,20,0.45)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid rgba(0,200,255,0.1)",
+        padding: "0 2rem",
+        display: "flex",
+        overflowX: "auto",
+      }}>
+        {TABS.map(tb => {
+          const active = tab === tb.key;
+          const c = colorMap[tb.color];
+          return (
+            <button key={tb.key} onClick={() => setTab(tb.key)}
+              className="rajdhani"
+              style={{
+                display: "flex", alignItems: "center", gap: 9,
+                padding: "0.85rem 1.5rem",
+                fontSize: "0.85rem", fontWeight: 600, letterSpacing: 2,
+                textTransform: "uppercase",
+                color: active ? c.main : "rgba(200,232,255,0.3)",
+                cursor: "pointer", border: "none", background: "none",
+                borderBottom: active ? `2px solid ${c.main}` : "2px solid transparent",
+                transition: "all 0.3s", whiteSpace: "nowrap",
+                textShadow: active ? `0 0 12px ${c.border}` : "none",
+                fontFamily: "'Rajdhani', sans-serif",
+              }}
+              onMouseEnter={e => { if(!active) e.currentTarget.style.color = "rgba(200,232,255,0.65)"; }}
+              onMouseLeave={e => { if(!active) e.currentTarget.style.color = "rgba(200,232,255,0.3)"; }}>
+              <span style={{
+                width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, color: active ? c.main : "rgba(200,232,255,0.3)",
+                background: active ? `${c.border.replace("0.25","0.1")}` : "transparent",
+                clipPath: active ? "polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%)" : "none",
+                transition: "all 0.3s",
+              }}>
+                {tb.icon}
+              </span>
+              {tb.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* CONTENIDO PRINCIPAL - renderiza el módulo activo */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/*
-          key={tab} hace que React destruya y recree el componente
-          cada vez que cambiamos de tab, así recarga los datos frescos
-        */}
+      {/* MAIN */}
+      <main style={{ flex: 1, padding: "2rem", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
         <Modulo
           key={tab}
           nombre={t.label}
@@ -547,10 +677,19 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-white/10 mt-16 py-6 text-center text-xs text-white/30" 
-      style={{ background: "rgba(5,10,30,0.4)", backdropFilter: "blur(20px)" }}>
-      
-                              Luis Miguel Montalvo — SENA 2026
+      <footer className="orbitron" style={{
+        padding: "1.2rem 2rem",
+        textAlign: "center",
+        fontSize: "0.52rem",
+        letterSpacing: 6,
+        textTransform: "uppercase",
+        color: "rgba(0,200,255,0.2)",
+        background: "rgba(0,5,20,0.55)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid rgba(0,200,255,0.08)",
+      }}>
+        Luis Miguel Montalvo — SENA 2026
       </footer>
     </div>
   );
